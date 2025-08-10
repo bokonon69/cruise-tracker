@@ -5,9 +5,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
       return { statusCode: 204, headers: corsHeaders(), body: '' };
     }
-
     const debug = event.queryStringParameters && event.queryStringParameters.debug;
-
     const apiKey = process.env.AISSTREAM_API_KEY;
     if (!apiKey) return json(502, { ok: false, error: 'missing-aisstream-api-key' });
 
@@ -81,7 +79,6 @@ function json(statusCode, obj) {
     body: JSON.stringify(obj)
   };
 }
-
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -89,12 +86,10 @@ function corsHeaders() {
     'Access-Control-Allow-Headers': 'Content-Type'
   };
 }
-
 function num(v, d) { const n = parseFloat(v); return Number.isFinite(n) ? n : d; }
 function inBbox(lat, lon, { minLat, maxLat, minLon, maxLon }) {
   return lat <= maxLat && lat >= minLat && lon >= minLon && lon <= maxLon;
 }
-
 function normalizeAisMessage(msg) {
   const md = msg.MetaData || msg.metadata || {};
   let m = msg.Message || msg.message || msg.Body || msg.body || {};

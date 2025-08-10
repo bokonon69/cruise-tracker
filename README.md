@@ -1,21 +1,9 @@
 # Lloydkade Live Tracker
 
-Proof-of-concept webapp die live schepen toont op de Nieuwe Maas langs de Lloydkade.
+Leaflet-frontend + Netlify Functions. Geen API-key in de client.
 
-## Installatie
-
+## Quickstart
 ```bash
-npm install
+npm install -g netlify-cli
 netlify dev
 ```
-
-## Deploy
-
-- Push naar GitHub
-- Koppel aan Netlify
-- Voeg `AISSTREAM_API_KEY` toe als environment variable
-
-## Endpoints
-
-- `/.netlify/functions/health`
-- `/.netlify/functions/ais-snapshot`

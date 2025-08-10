@@ -1,2 +1,194 @@
 <!doctype html>
-<html><body>Lloydkade live tracker frontend</body></html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lloydkade live tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #app { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
+    header { grid-column: 1 / span 2; padding: .6rem .9rem; border-bottom: 1px solid #e5e7eb; display:flex; gap:.75rem; align-items: center; flex-wrap: wrap; }
+    aside { border-right: 1px solid #e5e7eb; overflow: auto; }
+    main { position: relative; }
+    #map { position:absolute; inset:0; }
+    footer { grid-column: 1 / span 2; border-top: 1px solid #e5e7eb; padding: .5rem .9rem; display:flex; justify-content: space-between; gap:.75rem; font-size: 14px; }
+    .controls label { margin-right: .5rem; font-size: 14px; }
+    .list { padding:.5rem; }
+    .list-item { padding:.4rem .3rem; border-bottom: 1px dashed #eee; cursor: pointer; }
+    .list-item:hover { background:#fafafa; }
+    .error { color: #b91c1c; }
+    button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
+    select, input[type="number"] { padding:.25rem .35rem; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <strong>lloydkade live tracker</strong>
+      <div class="controls">
+        <label>bbox:
+          <select id="bbox">
+            <option value="normaal">normaal</option>
+            <option value="smal">smal</option>
+            <option value="ruim">ruim</option>
+          </select>
+        </label>
+        <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
+        <button id="start">start</button>
+        <button id="stop" disabled>stop</button>
+        <span id="status"></span>
+      </div>
+    </header>
+    <aside>
+      <div class="list" id="list"></div>
+    </aside>
+    <main>
+      <div id="map"></div>
+    </main>
+    <footer>
+      <div>schepen: <span id="count">0</span></div>
+      <div>latency: <span id="latency">–</span> ms</div>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
+    const BBOXES = {
+      smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
+      normaal:{ ...DEFAULTS },
+      ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 }
+    };
+
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    let markers = new Map();
+    let pollTimer = null;
+
+    function fitTo(b) {
+      const sw = L.latLng(b.minLat, b.minLon);
+      const ne = L.latLng(b.maxLat, b.maxLon);
+      map.fitBounds(L.latLngBounds(sw, ne));
+    }
+    fitTo(BBOXES.normaal);
+
+    function fmt(n, d=1){ return (n==null || Number.isNaN(n)) ? '–' : Number(n).toFixed(d); }
+    const vf = (mmsi) => `https://www.vesselfinder.com/?mmsi=${encodeURIComponent(mmsi)}`;
+
+    async function snapshot(bbox, windowMs=6000) {
+      const url = new URL('/.netlify/functions/ais-snapshot', window.location.origin);
+      Object.entries({ ...bbox, windowMs }).forEach(([k,v]) => url.searchParams.set(k, v));
+      const t0 = performance.now();
+      const res = await fetch(url, { cache: 'no-store' });
+      const latency = Math.round(performance.now() - t0);
+      document.getElementById('latency').textContent = latency;
+      if (!res.ok) throw new Error(`http ${res.status}`);
+      return res.json();
+    }
+
+    function renderList(items) {
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      items.sort((a,b) => (b.sog||0)-(a.sog||0));
+      for (const v of items) {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)}`;
+        div.onclick = () => {
+          const m = markers.get(v.mmsi);
+          if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
+        };
+        el.appendChild(div);
+      }
+    }
+
+    function renderMarkers(items) {
+      for (const [mmsi, mk] of markers.entries()) {
+        if (!items.find(v => v.mmsi === mmsi)) {
+          map.removeLayer(mk);
+          markers.delete(mmsi);
+        }
+      }
+      for (const v of items) {
+        const latlng = [v.lat, v.lon];
+        const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
+        const existing = markers.get(v.mmsi);
+        if (existing) {
+          existing.setLatLng(latlng).bindPopup(popup);
+        } else {
+          const mk = L.circleMarker(latlng, { radius: 6, weight: 1 });
+          mk.addTo(map).bindPopup(popup);
+          markers.set(v.mmsi, mk);
+        }
+      }
+      document.getElementById('count').textContent = String(items.length);
+    }
+
+    function status(msg, isError=false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = isError ? 'error' : '';
+    }
+
+    const currentBbox = () => BBOXES[document.getElementById('bbox').value] || BBOXES.normaal;
+    const currentIntervalMs = () => Math.min(Math.max(parseInt(document.getElementById('interval').value,10)||5,2),60)*1000;
+
+    async function tick() {
+      const bbox = currentBbox();
+      try {
+        const res = await snapshot(bbox, 6000);
+        status(`ok (${res.count})`);
+        renderMarkers(res.data || []);
+        renderList(res.data || []);
+      } catch (e) {
+        status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
+        demoOnce();
+      }
+    }
+
+    function start() {
+      if (pollTimer) return;
+      document.getElementById('start').disabled = true;
+      document.getElementById('stop').disabled = false;
+      tick();
+      pollTimer = setInterval(tick, currentIntervalMs());
+    }
+
+    function stop() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+      document.getElementById('start').disabled = false;
+      document.getElementById('stop').disabled = true;
+      status('gestopt');
+    }
+
+    document.getElementById('start').onclick = start;
+    document.getElementById('stop').onclick = stop;
+    document.getElementById('bbox').onchange = () => { fitTo(currentBbox()); };
+
+    function demoOnce() {
+      const b = currentBbox();
+      const rnd = (min, max) => min + Math.random() * (max - min);
+      const names = ['Demo I', 'Demo II', 'Demo III', 'Demo IV'];
+      const items = names.map((n, i) => ({
+        mmsi: `999000${i+1}`,
+        name: n,
+        lat: rnd(b.minLat, b.maxLat),
+        lon: rnd(b.minLon, b.maxLon),
+        sog: Math.round(rnd(0, 18)*10)/10,
+        cog: Math.round(rnd(0, 359)),
+        type: 'Demo',
+        ts: Date.now()
+      }));
+      renderMarkers(items);
+      renderList(items);
+    }
+  </script>
+</body>
+</html>
