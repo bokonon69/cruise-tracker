@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>lloydkade live — publiek</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b1320; color:#e7eefc; }
     .wrap { display:grid; grid-template-columns: 340px 1fr; gap:10px; height:100vh; padding:10px; box-sizing: border-box; }
     .panel { background:#111a2e; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px; display:flex; flex-direction:column; }
-    #map { border-radius:14px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    #map { border-radius:14px; overflow:hidden; position:relative; }
     .h { font-weight:700; margin-bottom:8px; }
     .muted { color:#9fb3d1; font-size:12px; }
     .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -22,10 +22,8 @@
     .status { font-size:12px; color:#9fb3d1; margin-top:6px; }
     .legend { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:#9fb3d1; }
     .bar { height:8px; width:140px; border-radius:6px; background: linear-gradient(90deg, #5e6c89 0%, #31a354 35%, #ffd54f 60%, #ff7043 85%, #ff1744 100%); }
+    .toast { position: fixed; right: 16px; bottom: 16px; background: #10203f; border:1px solid rgba(255,255,255,.12); color:#e7eefc; padding:10px 12px; border-radius:10px; }
     a { color:#90caf9; text-decoration:none; }
-    .filters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
-    .toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe1ff; }
-    .toggle input { width:auto; }
   </style>
 </head>
 <body>
@@ -50,10 +48,7 @@
         <button id="btnRefresh">ververs</button>
       </div>
 
-      <div class="filters">
-        <label class="toggle"><input id="onlyPassengers" type="checkbox" /> alleen passagiers</label>
-        <div class="legend"><div class="bar"></div><div>kleur = snelheid (kn)</div></div>
-      </div>
+      <div class="legend"><div class="bar"></div><div>kleur = snelheid (kn)</div></div>
 
       <div class="status" id="status">status: idle</div>
       <div class="list" id="list"></div>
@@ -63,63 +58,44 @@
 
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // bbox-profielen
+    // panes voor klikbare markers
+    const map = L.map('map', { preferCanvas:false }); // vector pane interactiever
+    map.createPane('markerPane');
+    map.getPane('markerPane').style.zIndex = 650; // boven overlays
+    map.setView([51.9062, 4.4630], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+
     const profiles = {
       smal:   { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 },
       normaal:{ minLat: 51.9010, maxLat: 51.9120, minLon: 4.4400, maxLon: 4.4800 },
       ruim:   { minLat: 51.8985, maxLat: 51.9150, minLon: 4.4300, maxLon: 4.4950 }
     };
     let bbox = profiles.normaal;
+    let bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {pane:'overlayPane', color:'#90caf9', weight:1, fillOpacity:.04, interactive:false}).addTo(map);
 
-    // kaart
-    const map = L.map('map', { preferCanvas:true }).setView([51.9062, 4.4630], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
-    let bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {color:'#90caf9', weight:1, fillOpacity:.04}).addTo(map);
-
-    // helpers
     const markers = new Map();
 
     function vesselFinderUrl(mmsi){ return `https://www.vesselfinder.com/vessels?mmsi=${encodeURIComponent(mmsi)}`; }
-
-    // kleur op basis van snelheid: 0 kn -> grijsblauw, 3 kn -> groen, 8 kn -> geel, 15+ -> rood
     function sogColor(kn) {
-      const v = Math.max(0, Math.min(15, Number.isFinite(kn) ? kn : 0)); // clamp 0..15
-      if (v <= 0.3) return "#5e6c89";       // stil
-      if (v <= 3)   return "#31a354";       // langzaam
-      if (v <= 8)   return "#ffd54f";       // kruissnelheid
-      if (v <= 15)  return "#ff7043";       // snel
-      return "#ff1744";                     // heel snel (edge)
+      const v = Math.max(0, Math.min(15, Number.isFinite(kn) ? kn : 0));
+      if (v <= 0.3) return "#5e6c89";
+      if (v <= 3)   return "#31a354";
+      if (v <= 8)   return "#ffd54f";
+      if (v <= 15)  return "#ff7043";
+      return "#ff1744";
     }
 
-    function isPassenger(type, name="") {
-      const s = (type||"").toLowerCase();
-      const n = (name||"").toLowerCase();
-      return s.includes("pass") || s.includes("ferry") || /spido|waterbus|veer|ferry|passag/i.test(n);
-    }
-
-    function renderList(arr) {
-      const el = document.getElementById('list');
-      el.innerHTML='';
-      arr.sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(s=>{
-        const row = document.createElement('div');
-        row.className='ship';
-        const link = s.mmsi ? `<a target="_blank" href="${vesselFinderUrl(s.mmsi)}">detail</a>` : '';
-        row.innerHTML = `<div><div class="name">${(s.name||'onbekend').trim()} <span class="chip">${s.mmsi||''}</span> ${link}</div>
-          <div class="muted">${s.type||'type n.b.'} • koers ${s.cog!=null?Math.round(s.cog)+'°':'—'} • ${Number.isFinite(s.sog)?s.sog.toFixed(1)+' kn':'—'}</div></div>
-          <div class="chip">${new Date(s.ts||Date.now()).toLocaleTimeString()}</div>`;
-        el.appendChild(row);
-      });
-    }
-
-    function upsertCircle(s) {
+    function upsert(s) {
       const color = sogColor(s.sog);
-      const opts = { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 };
+      const opts = { pane:'markerPane', radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 1, bubblingMouseEvents: true };
       let mk = markers.get(s.mmsi);
       if (!mk) {
         mk = L.circleMarker([s.lat, s.lon], opts).addTo(map);
+        mk.on('click', () => mk.openPopup());
         mk.bindPopup(`<b>${(s.name||'onbekend').trim()}</b><br>MMSI:${s.mmsi||'—'}<br>Type:${s.type||'—'}<br>SOG:${Number.isFinite(s.sog)?s.sog.toFixed(1)+' kn':'—'}<br>COG:${s.cog!=null?Math.round(s.cog)+'°':'—'}<br><a target="_blank" href="${vesselFinderUrl(s.mmsi)}">open in vesselfinder</a>`);
+        mk.bringToFront();
         markers.set(s.mmsi, mk);
       } else {
         mk.setLatLng([s.lat, s.lon]);
@@ -127,21 +103,23 @@
       }
     }
 
-    const lastSeen = new Set();
+    function renderList(arr) {
+      const el = document.getElementById('list'); el.innerHTML='';
+      arr.sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(s=>{
+        const row = document.createElement('div'); row.className='ship';
+        row.innerHTML = `<div><div class="name">${(s.name||'onbekend').trim()} <span class="chip">${s.mmsi||''}</span> <a target="_blank" href="${vesselFinderUrl(s.mmsi)}">detail</a></div>
+          <div class="muted">${s.type||'type n.b.'} • koers ${s.cog!=null?Math.round(s.cog)+'°':'—'} • ${Number.isFinite(s.sog)?s.sog.toFixed(1)+' kn':'—'}</div></div>
+          <div class="chip">${new Date(s.ts||Date.now()).toLocaleTimeString()}</div>`;
+        el.appendChild(row);
+      });
+    }
+
     function toast(msg) {
-      let t = document.getElementById('toast');
-      if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+      const t = document.querySelector('.toast');
       t.textContent = msg; t.style.display = 'block';
-      setTimeout(()=> t.style.display='none', 3500);
+      setTimeout(() => t.style.display = 'none', 3000);
     }
 
-    function applyFilter(list) {
-      const onlyPass = document.getElementById('onlyPassengers').checked;
-      if (!onlyPass) return list;
-      return list.filter(x => isPassenger(x.type, x.name));
-    }
-
-    // polling
     function apiUrl() {
       return `/.netlify/functions/ais-snapshot?minLat=${bbox.minLat}&maxLat=${bbox.maxLat}&minLon=${bbox.minLon}&maxLon=${bbox.maxLon}&windowMs=6000`;
     }
@@ -155,18 +133,14 @@
         const json = await r.json();
         if (!json.ok) { document.getElementById('status').textContent = 'status: fout — ' + (json.error || r.status); return; }
 
-        const filtered = applyFilter(json.data||[]);
+        // notify new
+        const ids = new Set((json.data||[]).map(s => s.mmsi));
+        ids.forEach(id => { if (!markers.has(id)) toast('nieuw schip: '+id); });
 
-        // binnenkomers
-        const nowIds = new Set(filtered.map(s=>s.mmsi));
-        filtered.forEach(s => { if (!lastSeen.has(s.mmsi)) toast(`nieuw schip: ${(s.name||s.mmsi).trim()}`); });
-        lastSeen.clear(); nowIds.forEach(id => lastSeen.add(id));
+        (json.data||[]).forEach(upsert);
+        renderList(json.data||[]);
 
-        filtered.forEach(upsertCircle);
-        renderList(filtered);
-
-        const dt = (performance.now()-t0).toFixed(0);
-        document.getElementById('status').textContent = `status: ${filtered.length}/${json.count} schepen • ${dt}ms`;
+        document.getElementById('status').textContent = `status: ${json.count} schepen • ${(performance.now()-t0).toFixed(0)}ms`;
       } catch (e) {
         document.getElementById('status').textContent = 'status: netwerkfout';
       }
@@ -174,8 +148,9 @@
 
     function setProfile(p){
       bbox = profiles[p] || profiles.normaal;
-      if (bboxRect) map.removeLayer(bboxRect);
-      bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {color:'#90caf9', weight:1, fillOpacity:.04}).addTo(map);
+      if (bboxRect) bboxRect.remove();
+      bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {pane:'overlayPane', color:'#90caf9', weight:1, fillOpacity:.04, interactive:false}).addTo(map);
+      map.fitBounds([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]]);
       map.invalidateSize();
       fetchSnapshot();
     }
@@ -189,8 +164,6 @@
       map.invalidateSize();
     });
     document.getElementById('btnRefresh').addEventListener('click', ()=> setProfile(document.getElementById('bboxProfile').value));
-    document.getElementById('onlyPassengers').addEventListener('change', ()=> fetchSnapshot());
-
     setProfile('normaal');
   </script>
 </body>
