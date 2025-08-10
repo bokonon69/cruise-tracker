@@ -1,0 +1,10 @@
+{
+  "name": "lloydkade-netlify",
+  "private": true,
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
