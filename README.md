@@ -1,10 +1,10 @@
-# Lloydkade Live Tracker — hide moored / show all (fix)
+# Lloydkade Live Tracker — mobile optimized
 
-Fixes:
-- Knop-handlers werken nu correct (`false` i.p.v. `False`).
-- Actieve knop krijgt visuele state.
-- Filtering toegepast via centrale `renderAll()`.
+What’s new:
+- Slide-out drawer for the ship list on small screens (☰ toggle)
+- Larger touch targets (≥44px), bigger popup font
+- Mobile defaults: start in **hide moored**, drawer closed, shorter trail/TTL
+- LocalStorage remembers mode (hide/show) and drawer open/closed
+- iOS-friendly layout: sticky header/footer, safe map gestures, no layout jumps
 
-Modes:
-- **Hide moored (default):** alleen SOG > 0.8 kn met geldige SOG.
-- **Show all:** alles tonen, ook SOG ≤ 0.8 en zonder SOG.
+Deploy the same way as before (Netlify Functions + `AISSTREAM_API_KEY`).

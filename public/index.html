@@ -1,36 +1,93 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>lloydkade live tracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
+    :root {
+      --header-h: 56px;
+      --footer-h: 40px;
+      --panel-w: 380px;
+      --panel-w-mobile: min(88vw, 360px);
+      --tap-size: 44px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    #app { display: grid; grid-template-columns: 380px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
-    header { grid-column: 1 / span 2; padding: .6rem .9rem; border-bottom: 1px solid #e5e7eb; display:flex; gap:.75rem; align-items: center; flex-wrap: wrap; }
-    aside { border-right: 1px solid #e5e7eb; overflow: auto; }
+    #app {
+      display: grid;
+      grid-template-columns: var(--panel-w) 1fr;
+      grid-template-rows: var(--header-h) 1fr var(--footer-h);
+      height: 100dvh;
+      overflow: hidden;
+    }
+    header {
+      grid-column: 1 / span 2;
+      display:flex; align-items:center; gap:.6rem; padding: .4rem .6rem;
+      border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: #fff; z-index: 3;
+    }
+    .brand { font-weight: 700; }
+    .controls { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+    .controls label { font-size: 14px; display:flex; align-items:center; gap:.3rem; }
+    .controls select, .controls input[type="number"], .controls input[type="text"] { padding:.35rem .45rem; font-size:14px; min-height: var(--tap-size); }
+    button { padding:.5rem .7rem; border-radius:.6rem; border:1px solid #d1d5db; background:#fff; cursor:pointer; min-height: var(--tap-size); }
+    button.active { background:#111827; color:#fff; border-color:#111827; }
+    aside { border-right: 1px solid #e5e7eb; overflow: auto; position: relative; z-index: 2; background:#fff; }
     main { position: relative; }
-    #map { position:absolute; inset:0; }
-    footer { grid-column: 1 / span 2; border-top: 1px solid #e5e7eb; padding: .5rem .9rem; display:flex; justify-content: space-between; gap:.75rem; font-size: 14px; }
-    .controls label { margin-right: .5rem; font-size: 14px; }
+    #map { position:absolute; inset:0; touch-action: none; }
+    footer { grid-column: 1 / span 2; border-top: 1px solid #e5e7eb; padding: .4rem .6rem; display:flex; justify-content: space-between; align-items:center; gap:.5rem; font-size: 14px; background:#fff; position: sticky; bottom: 0; z-index: 3; }
     .list { padding:.5rem; }
-    .list-item { padding:.4rem .3rem; border-bottom: 1px dashed #eee; cursor: pointer; }
+    .list-item { padding:.5rem .35rem; border-bottom: 1px dashed #eee; cursor: pointer; }
     .list-item:hover { background:#fafafa; }
     .error { color: #b91c1c; }
-    button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
-    button.active { background:#111827; color:#fff; border-color:#111827; }
-    select, input[type="number"], input[type="text"] { padding:.25rem .35rem; }
     .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.25rem .5rem; }
     .muted { opacity:.75; font-size:12px; }
     .row { display:flex; gap:.5rem; align-items:center; margin-top:.25rem; }
+    /* Drawer toggle on mobile */
+    .burger { display:none; width: var(--tap-size); height: var(--tap-size); align-items:center; justify-content:center; border-radius:.6rem; }
+    .burger svg { width:22px; height:22px; }
+    /* Mobile layout */
+    @media (max-width: 768px) {
+      #app {
+        grid-template-columns: 1fr;
+      }
+      aside {
+        position: absolute;
+        top: var(--header-h);
+        bottom: var(--footer-h);
+        left: 0;
+        width: var(--panel-w-mobile);
+        transform: translateX(-105%);
+        transition: transform .2s ease-out, box-shadow .2s ease-out;
+        box-shadow: 0 10px 30px rgba(0,0,0,.12);
+        border-right: 0;
+        border-top: 1px solid #eee;
+        border-bottom: 1px solid #eee;
+        border-radius: 0 .75rem .75rem 0;
+      }
+      aside.open {
+        transform: translateX(0);
+      }
+      .burger { display:flex; }
+      header { gap:.4rem; }
+      .controls { gap:.35rem; }
+      .controls label { font-size: 13px; }
+      .controls button { padding:.45rem .6rem; }
+      .controls select, .controls input[type="number"], .controls input[type="text"] { min-width: 84px; }
+    }
+    /* Larger popup text for mobile */
+    .leaflet-popup-content { font-size: 15px; line-height: 1.25; }
   </style>
 </head>
 <body>
   <div id="app">
     <header>
-      <strong>lloydkade live tracker</strong>
+      <button id="burger" class="burger" aria-label="toggle panel" title="toggle panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="brand">lloydkade live tracker</div>
       <div class="controls">
         <label>bbox:
           <select id="bbox">
@@ -41,18 +98,18 @@
             <option value="custom">custom</option>
           </select>
         </label>
-        <label>toon bbox: <input id="showbbox" type="checkbox" checked /></label>
-        <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
-        <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
-        <label>trail (punten): <input id="trailLen" type="number" min="3" max="30" step="1" value="8" /></label>
-        <button id="presetHide" class="active">Hide moored</button>
-        <button id="presetShow">Show all</button>
+        <label>show bbox <input id="showbbox" type="checkbox" checked /></label>
+        <label>interval (s) <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
+        <label>ttl (s) <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
+        <label>trail <input id="trailLen" type="number" min="3" max="30" step="1" value="8" /></label>
+        <button id="presetHide" class="active">hide moored</button>
+        <button id="presetShow">show all</button>
         <button id="start">start</button>
         <button id="stop" disabled>stop</button>
         <span id="status"></span>
       </div>
     </header>
-    <aside>
+    <aside id="panel">
       <div style="padding:.5rem" id="customPanel" class="muted">
         <div><strong>custom bbox</strong></div>
         <div class="grid">
@@ -66,17 +123,17 @@
           <button id="applyToMap">update rectangle</button>
         </div>
         <hr/>
-        <div><strong>profielen opslaan</strong></div>
+        <div><strong>profiles</strong></div>
         <div class="row">
-          <input id="profileName" type="text" placeholder="profielnaam" />
+          <input id="profileName" type="text" placeholder="name" />
           <button id="saveProfile">save</button>
           <button id="setDefault">set default</button>
         </div>
         <div class="row">
-          <label>laad profiel: <select id="savedProfiles"></select></label>
+          <label>load <select id="savedProfiles"></select></label>
           <button id="deleteProfile">delete</button>
         </div>
-        <div class="muted">profielen worden lokaal opgeslagen (browser localStorage)</div>
+        <div class="muted">saved locally (this device)</div>
         <hr/>
       </div>
       <div class="list" id="list"></div>
@@ -85,7 +142,8 @@
       <div id="map"></div>
     </main>
     <footer>
-      <div>schepen: <span id="count">0</span></div>
+      <div>ships: <span id="count">0</span></div>
+      <div>mode: <span id="mode">hide moored</span></div>
       <div>latency: <span id="latency">–</span> ms</div>
     </footer>
   </div>
@@ -93,6 +151,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script>
+    // basic feature detection
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
     const BASE_PROFILES = {
       smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
@@ -103,11 +164,24 @@
 
     // persistent store
     const STORE = new Map(); // mmsi -> { ...v, lastSeen, trail: [[lat,lon], ...] }
-    let TTL_MS = 45000;
-    let TRAIL_LEN = 8;
-    let SHOW_ALL = false; // default hide moored
+    let TTL_MS = isMobile ? 35000 : 45000;
+    let TRAIL_LEN = isMobile ? 6 : 8;
+    let SHOW_ALL = false; // default hide moored on mobile & desktop
+    let DRAWER_OPEN = !isMobile; // open panel by default on desktop, closed on mobile
 
-    const map = L.map('map');
+    const LS_MODE = 'lloyd_mode_v1';
+    const LS_DRAWER = 'lloyd_drawer_v1';
+
+    // restore persisted mode/drawer
+    try {
+      const savedMode = localStorage.getItem(LS_MODE);
+      if (savedMode === 'show') SHOW_ALL = true;
+      const savedDrawer = localStorage.getItem(LS_DRAWER);
+      if (savedDrawer === 'open') DRAWER_OPEN = true;
+      if (savedDrawer === 'closed') DRAWER_OPEN = false;
+    } catch {}
+
+    const map = L.map('map', { tap: true, tapTolerance: 10, inertia: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19
@@ -230,7 +304,7 @@
 
     function updateStore(items, bbox) {
       const now = Date.now();
-      TRAIL_LEN = Math.min(Math.max(parseInt(document.getElementById('trailLen').value,10)||8,3),30);
+      TRAIL_LEN = Math.min(Math.max(parseInt(document.getElementById('trailLen').value,10)||(isMobile?6:8),3),30);
       for (const v of items) {
         if (!v.mmsi) continue;
         const prev = STORE.get(v.mmsi) || {};
@@ -274,10 +348,11 @@
         div.style.opacity = dim;
         const since = Math.round(age/1000);
         const sogTxt = (v.sog==null || Number.isNaN(v.sog)) ? '–' : fmt(v.sog);
-        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${sogTxt} kn · COG ${fmt(v.cog)} · ${since}s geleden`;
+        div.textContent = `${v.name || 'unknown'} · MMSI ${v.mmsi || '–'} · SOG ${sogTxt} kn · COG ${fmt(v.cog)} · ${since}s ago`;
         div.onclick = () => {
           const m = markers.get(v.mmsi);
           if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
+          if (isMobile) toggleDrawer(false);
         };
         el.appendChild(div);
       }
@@ -302,16 +377,16 @@
         const age = now - (v.lastSeen||0);
         const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
         const opacity = Math.max(0.25, 1 - frac * 0.85);
-        const radius = 6 - Math.floor(frac * 2);
+        const radius = isMobile ? 7 : 6;
 
-        const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
+        const popup = `<strong>${v.name || 'unknown'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
 
         let mk = markers.get(v.mmsi);
         if (mk) {
           mk.setLatLng(latlng).setStyle({ opacity, fillOpacity: opacity, radius });
           mk.bindPopup(popup);
         } else {
-          mk = L.circleMarker(latlng, { radius, weight: 1, opacity, fillOpacity: opacity });
+          mk = L.circleMarker(latlng, { radius, weight: 1.5, opacity, fillOpacity: opacity });
           mk.addTo(map).bindPopup(popup);
           markers.set(v.mmsi, mk);
         }
@@ -353,6 +428,7 @@
       const filtered = applyFilter(active);
       renderGraphics(filtered);
       renderList(filtered);
+      document.getElementById('mode').textContent = SHOW_ALL ? 'show all' : 'hide moored';
     }
 
     async function tick() {
@@ -361,18 +437,20 @@
         const res = await snapshot(bbox, 6000);
         status(`ok (${res.count})`);
         updateStore(res.data || [], bbox);
-        renderAll();
+        // schedule drawing
+        requestAnimationFrame(renderAll);
       } catch (e) {
-        status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
+        status(`function not reachable (${e.message}). demo mode`, true);
         demoOnce();
       }
     }
 
     function start() {
       if (pollTimer) return;
-      TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||45)*1000, 5000), 600000);
-      SHOW_ALL = false; // default: hide moored
+      // on mobile start with drawer closed + hide moored (unless restored)
+      toggleDrawer(DRAWER_OPEN);
       setActiveButtons();
+      TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||(isMobile?35:45))*1000, 5000), 600000);
       document.getElementById('start').disabled = true;
       document.getElementById('stop').disabled = false;
       tick();
@@ -385,13 +463,24 @@
       pollTimer = null;
       document.getElementById('start').disabled = false;
       document.getElementById('stop').disabled = true;
-      status('gestopt');
+      status('stopped');
     }
 
     function setActiveButtons() {
       document.getElementById('presetHide').classList.toggle('active', !SHOW_ALL);
       document.getElementById('presetShow').classList.toggle('active', SHOW_ALL);
     }
+
+    // Drawer
+    function toggleDrawer(open) {
+      const panel = document.getElementById('panel');
+      if (open === undefined) open = !panel.classList.contains('open');
+      if (open) panel.classList.add('open'); else panel.classList.remove('open');
+      try { localStorage.setItem(LS_DRAWER, open ? 'open' : 'closed'); } catch {}
+    }
+
+    // Event handlers
+    document.getElementById('burger').onclick = () => toggleDrawer();
 
     document.getElementById('start').onclick = start;
     document.getElementById('stop').onclick = stop;
@@ -404,8 +493,18 @@
       if (sel !== 'custom') setInputs(b);
     };
     document.getElementById('showbbox').onchange = () => { drawBbox(currentBbox(), document.getElementById('bbox').value === 'custom'); };
-    document.getElementById('presetHide').onclick = () => { SHOW_ALL = false; setActiveButtons(); renderAll(); };
-    document.getElementById('presetShow').onclick = () => { SHOW_ALL = true; setActiveButtons(); renderAll(); };
+    document.getElementById('presetHide').onclick = () => {
+      SHOW_ALL = false;
+      setActiveButtons();
+      try { localStorage.setItem(LS_MODE, 'hide'); } catch {}
+      renderAll();
+    };
+    document.getElementById('presetShow').onclick = () => {
+      SHOW_ALL = true;
+      setActiveButtons();
+      try { localStorage.setItem(LS_MODE, 'show'); } catch {}
+      renderAll();
+    };
 
     document.getElementById('applyFromMap').onclick = () => {
       if (!bboxRect) return;
@@ -434,7 +533,7 @@
     }
     document.getElementById('saveProfile').onclick = () => {
       const name = (document.getElementById('profileName').value || '').trim();
-      if (!name) return alert('voer een profielnaam in');
+      if (!name) return alert('enter a profile name');
       const vals = getInputs();
       const saved = loadSavedProfiles();
       saved[name] = vals;
@@ -453,9 +552,9 @@
     };
     document.getElementById('setDefault').onclick = () => {
       const sel = document.getElementById('bbox').value;
-      if (sel === 'custom') return alert('sla het custom profiel eerst op met een naam');
+      if (sel === 'custom') return alert('save the custom profile first');
       setDefaultProfileName(sel);
-      alert('default profiel gezet: ' + sel);
+      alert('default profile set: ' + sel);
     };
     document.getElementById('deleteProfile').onclick = () => {
       const selSaved = document.getElementById('savedProfiles').value;
@@ -491,6 +590,7 @@
     loadSavedProfilesSelect();
     setInputs(BASE_PROFILES.gewenst);
     document.getElementById('customPanel').style.display = (document.getElementById('bbox').value === 'custom') ? 'block' : 'none';
+    if (DRAWER_OPEN) document.getElementById('panel').classList.add('open');
 
     function demoOnce() {
       const b = currentBbox();
