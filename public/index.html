@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lloydkade live — publiek (Netlify)</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <title>lloydkade live — publiek</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b1320; color:#e7eefc; }
     .wrap { display:grid; grid-template-columns: 320px 1fr; gap:10px; height:100vh; padding:10px; box-sizing: border-box; }
@@ -20,28 +20,31 @@
     .name { font-weight:600; }
     .chip { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.1); background:#0d2247; color:#90caf9; }
     .status { font-size:12px; color:#9fb3d1; margin-top:6px; }
+    .toast { position: fixed; right: 16px; bottom: 16px; background: #10203f; border:1px solid rgba(255,255,255,.12); color:#e7eefc; padding:10px 12px; border-radius:10px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="panel">
       <div class="h">lloydkade — publiek</div>
-      <div class="muted">data via proxy api (netlify function). api-key blijft server-side.</div>
+      <div class="muted">check eerst of functions werken: <a href="/.netlify/functions/health" target="_blank">health</a></div>
+
       <label style="margin-top:8px;">update-interval (s)</label>
       <div class="row">
-        <input id="interval" type="number" min="2" value="5" />
+        <input id="interval" type="number" min="3" value="5" />
         <button id="btnStart">start</button>
       </div>
+
       <div class="status" id="status">status: idle</div>
       <div class="list" id="list"></div>
     </div>
     <div id="map"></div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const bbox = { minLat: 51.9010, maxLat: 51.9120, minLon: 4.4400, maxLon: 4.4800 };
-    const map = L.map('map', { preferCanvas:true }).setView([51.9065, 4.4600], 14);
+    const bbox = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
+    const map = L.map('map', { preferCanvas:true }).setView([51.9062, 4.4630], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
     L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {color:'#90caf9', weight:1, fillOpacity:.04}).addTo(map);
     const markers = new Map();
@@ -57,13 +60,17 @@
       if (s.includes('cargo') || s.includes('79') || s.includes('70')) return '#8bc34a';
       return '#90caf9';
     };
-
+    function upsert(s) {
+      const color = typeColor(s.type);
+      const icon = makeIcon(color, (s.cog||0));
+      let mk = markers.get(s.mmsi);
+      if (!mk) { mk = L.marker([s.lat, s.lon], { icon }).addTo(map); markers.set(s.mmsi, mk); }
+      else { mk.setLatLng([s.lat, s.lon]); mk.setIcon(icon); }
+    }
     function renderList(arr) {
-      const el = document.getElementById('list');
-      el.innerHTML='';
+      const el = document.getElementById('list'); el.innerHTML='';
       arr.sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(s=>{
-        const row = document.createElement('div');
-        row.className='ship';
+        const row = document.createElement('div'); row.className='ship';
         row.innerHTML = `<div><div class="name">${s.name || 'onbekend'} <span class="chip">${s.mmsi||''}</span></div>
           <div class="muted">${s.type||'type n.b.'} • koers ${s.cog!=null?Math.round(s.cog)+'°':'—'} • ${s.sog!=null?s.sog.toFixed(1)+' kn':'—'}</div></div>
           <div class="chip">${new Date(s.ts||Date.now()).toLocaleTimeString()}</div>`;
@@ -71,40 +78,20 @@
       });
     }
 
-    function upsert(s) {
-      const color = typeColor(s.type);
-      const icon = makeIcon(color, (s.cog||0));
-      let mk = markers.get(s.mmsi);
-      if (!mk) {
-        mk = L.marker([s.lat, s.lon], { icon }).addTo(map);
-        mk.bindPopup(`<b>${s.name||'onbekend'}</b><br>MMSI:${s.mmsi||'—'}<br>Type:${s.type||'—'}<br>SOG:${s.sog!=null?s.sog.toFixed(1)+' kn':'—'}<br>COG:${s.cog!=null?Math.round(s.cog)+'°':'—'}`);
-        markers.set(s.mmsi, mk);
-      } else {
-        mk.setLatLng([s.lat, s.lon]);
-        mk.setIcon(icon);
-        mk.setPopupContent(`<b>${s.name||'onbekend'}</b><br>MMSI:${s.mmsi||'—'}<br>Type:${s.type||'—'}<br>SOG:${s.sog!=null?s.sog.toFixed(1)+' kn':'—'}<br>COG:${s.cog!=null?Math.round(s.cog)+'°':'—'}`);
-      }
-    }
-
     let timer = null;
     async function fetchSnapshot() {
-      const url = `/.netlify/functions/ais-snapshot?minLat=${bbox.minLat}&maxLat=${bbox.maxLat}&minLon=${bbox.minLon}&maxLon=${bbox.maxLon}&windowMs=1500`;
-      try {
-        const t0 = performance.now();
-        const r = await fetch(url, { cache:'no-store' });
-        const json = await r.json();
-        if (!json.ok) { document.getElementById('status').textContent = 'status: fout — ' + (json.error || r.status); return; }
-        const dt = (performance.now()-t0).toFixed(0);
-        document.getElementById('status').textContent = `status: ${json.count} schepen • ${dt}ms`;
-        (json.data||[]).forEach(upsert);
-        renderList(json.data||[]);
-      } catch (e) {
-        document.getElementById('status').textContent = 'status: netwerkfout';
-      }
+      const url = `/.netlify/functions/ais-snapshot?minLat=${bbox.minLat}&maxLat=${bbox.maxLat}&minLon=${bbox.minLon}&maxLon=${bbox.maxLon}&windowMs=2000`;
+      const t0 = performance.now();
+      const r = await fetch(url, { cache:'no-store' });
+      const json = await r.json().catch(()=>({ ok:false, error:"json parse" }));
+      if (!json.ok) { document.getElementById('status').textContent = 'status: fout — ' + (json.error || r.status); return; }
+      (json.data||[]).forEach(upsert);
+      renderList(json.data||[]);
+      document.getElementById('status').textContent = `status: ${json.count} schepen • ${(performance.now()-t0).toFixed(0)}ms`;
     }
 
     document.getElementById('btnStart').addEventListener('click', ()=>{
-      const secs = Math.max(2, parseInt(document.getElementById('interval').value||'5',10));
+      const secs = Math.max(3, parseInt(document.getElementById('interval').value||'5',10));
       if (timer) clearInterval(timer);
       fetchSnapshot();
       timer = setInterval(fetchSnapshot, secs*1000);
