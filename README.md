@@ -1,8 +1,13 @@
-# Lloydkade Live Tracker (sticky + trails)
+# Lloydkade Live Tracker — custom bbox
 
-Leaflet-frontend + Netlify Functions. Houdt schepen zichtbaar met TTL en tekent mini-trails.
+Leaflet + Netlify Functions. Features:
+- Sticky schepen met TTL (instelbaar)
+- Mini-trails (laatste 8 punten)
+- Profielen: smal, normaal, ruim, gewenst, custom
+- Bbox-overlay met toggle
+- Custom-profiel met **editable rectangle** (Leaflet.draw) + invoervelden
 
-## Quickstart
+## Dev
 ```bash
 npm install -g netlify-cli
 netlify dev

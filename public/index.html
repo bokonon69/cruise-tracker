@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>lloydkade live tracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    #app { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
+    #app { display: grid; grid-template-columns: 360px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
     header { grid-column: 1 / span 2; padding: .6rem .9rem; border-bottom: 1px solid #e5e7eb; display:flex; gap:.75rem; align-items: center; flex-wrap: wrap; }
     aside { border-right: 1px solid #e5e7eb; overflow: auto; }
     main { position: relative; }
@@ -20,6 +21,8 @@
     .error { color: #b91c1c; }
     button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
     select, input[type="number"] { padding:.25rem .35rem; }
+    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.25rem .5rem; }
+    .muted { opacity:.75; font-size:12px; }
   </style>
 </head>
 <body>
@@ -29,11 +32,14 @@
       <div class="controls">
         <label>bbox:
           <select id="bbox">
+            <option value="gewenst">gewenst</option>
             <option value="normaal">normaal</option>
             <option value="smal">smal</option>
             <option value="ruim">ruim</option>
+            <option value="custom">custom</option>
           </select>
         </label>
+        <label>toon bbox: <input id="showbbox" type="checkbox" checked /></label>
         <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
         <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
         <button id="start">start</button>
@@ -42,6 +48,21 @@
       </div>
     </header>
     <aside>
+      <div style="padding:.5rem" id="customPanel" class="muted">
+        <div><strong>custom bbox</strong></div>
+        <div class="grid">
+          <label>minLat <input id="minLat" type="number" step="0.0001" /></label>
+          <label>maxLat <input id="maxLat" type="number" step="0.0001" /></label>
+          <label>minLon <input id="minLon" type="number" step="0.0001" /></label>
+          <label>maxLon <input id="maxLon" type="number" step="0.0001" /></label>
+        </div>
+        <div style="margin-top:.35rem;">
+          <button id="applyFromMap">use map bbox</button>
+          <button id="applyToMap">update rectangle</button>
+        </div>
+        <div class="muted" style="margin-top:.25rem;">sleep de hoekpunten van het kader om te wijzigen</div>
+        <hr style="margin:.5rem 0;"/>
+      </div>
       <div class="list" id="list"></div>
     </aside>
     <main>
@@ -54,18 +75,20 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script>
     const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
     const BBOXES = {
       smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
       normaal:{ ...DEFAULTS },
-      ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 }
+      ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 },
+      gewenst:{ minLat: 51.9039, maxLat: 51.9078, minLon: 4.4548, maxLon: 4.4725 }
     };
 
-    // persistent client-side store
+    // persistent store + trails
     const STORE = new Map(); // mmsi -> { ...v, lastSeen, trail: [[lat,lon], ...] }
     let TTL_MS = 45000;
-    const TRAIL_LEN = 8; // keep last 8 points
+    const TRAIL_LEN = 8;
 
     const map = L.map('map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -75,14 +98,67 @@
 
     let markers = new Map();   // mmsi -> circleMarker
     let trails = new Map();    // mmsi -> polyline
+    let bboxRect = null;       // rectangle overlay
     let pollTimer = null;
 
+    // --- bbox helpers ---
     function fitTo(b) {
       const sw = L.latLng(b.minLat, b.minLon);
       const ne = L.latLng(b.maxLat, b.maxLon);
       map.fitBounds(L.latLngBounds(sw, ne));
     }
-    fitTo(BBOXES.normaal);
+
+    function getInputs() {
+      return {
+        minLat: parseFloat(document.getElementById('minLat').value),
+        maxLat: parseFloat(document.getElementById('maxLat').value),
+        minLon: parseFloat(document.getElementById('minLon').value),
+        maxLon: parseFloat(document.getElementById('maxLon').value)
+      };
+    }
+    function setInputs(b) {
+      document.getElementById('minLat').value = b.minLat.toFixed(4);
+      document.getElementById('maxLat').value = b.maxLat.toFixed(4);
+      document.getElementById('minLon').value = b.minLon.toFixed(4);
+      document.getElementById('maxLon').value = b.maxLon.toFixed(4);
+    }
+
+    function drawBbox(b, editable=false) {
+      if (bboxRect) { map.removeLayer(bboxRect); bboxRect = null; }
+      const show = document.getElementById('showbbox').checked;
+      if (!show) return;
+      const sw = L.latLng(b.minLat, b.minLon);
+      const ne = L.latLng(b.maxLat, b.maxLon);
+      bboxRect = L.rectangle([sw, ne], { weight: 1, dashArray: '4,4', fillOpacity: 0.03 });
+      bboxRect.addTo(map);
+      if (editable && bboxRect.editing && typeof bboxRect.editing.enable === 'function') {
+        bboxRect.editing.enable();
+        bboxRect.on('edit', () => {
+          const bb = bboxRect.getBounds();
+          const s = bb.getSouthWest();
+          const n = bb.getNorthEast();
+          setInputs({ minLat: s.lat, minLon: s.lng, maxLat: n.lat, maxLon: n.lng });
+        });
+      }
+    }
+
+    function currentBbox() {
+      const sel = document.getElementById('bbox').value;
+      if (sel === 'custom') {
+        const v = getInputs();
+        return {
+          minLat: v.minLat || DEFAULTS.minLat,
+          maxLat: v.maxLat || DEFAULTS.maxLat,
+          minLon: v.minLon || DEFAULTS.minLon,
+          maxLon: v.maxLon || DEFAULTS.maxLon
+        };
+      }
+      return BBOXES[sel] || BBOXES.gewenst;
+    }
+
+    // init
+    fitTo(BBOXES.gewenst);
+    drawBbox(BBOXES.gewenst);
 
     function fmt(n, d=1){ return (n==null || Number.isNaN(n)) ? '–' : Number(n).toFixed(d); }
     const vf = (mmsi) => `https://www.vesselfinder.com/?mmsi=${encodeURIComponent(mmsi)}`;
@@ -113,7 +189,6 @@
                      || rec.lon < bbox.minLon || rec.lon > bbox.maxLon;
         if (expired || outside) {
           STORE.delete(mmsi);
-          // remove graphics
           const mk = markers.get(mmsi); if (mk) { map.removeLayer(mk); markers.delete(mmsi); }
           const pl = trails.get(mmsi);  if (pl) { map.removeLayer(pl); trails.delete(mmsi); }
         }
@@ -131,7 +206,8 @@
         const div = document.createElement('div');
         div.className = 'list-item';
         div.style.opacity = dim;
-        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)}`;
+        const since = Math.round(age/1000);
+        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)} · ${since}s geleden`;
         div.onclick = () => {
           const m = markers.get(v.mmsi);
           if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
@@ -148,7 +224,7 @@
         const age = now - (v.lastSeen||0);
         const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
         const opacity = Math.max(0.25, 1 - frac * 0.85);
-        const radius = 6 - Math.floor(frac * 2); // a bit smaller when older
+        const radius = 6 - Math.floor(frac * 2);
 
         const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
 
@@ -181,8 +257,7 @@
       el.className = isError ? 'error' : '';
     }
 
-    const currentBbox = () => BBOXES[document.getElementById('bbox').value] || BBOXES.normaal;
-    const currentIntervalMs = () => Math.min(Math.max(parseInt(document.getElementById('interval').value,10)||5,2),60)*1000;
+    function currentIntervalMs() { return Math.min(Math.max(parseInt(document.getElementById('interval').value,10)||5,2),60)*1000; }
 
     async function tick() {
       const bbox = currentBbox();
@@ -219,8 +294,34 @@
 
     document.getElementById('start').onclick = start;
     document.getElementById('stop').onclick = stop;
-    document.getElementById('bbox').onchange = () => { fitTo(currentBbox()); };
+    document.getElementById('bbox').onchange = () => {
+      const sel = document.getElementById('bbox').value;
+      document.getElementById('customPanel').style.display = (sel === 'custom') ? 'block' : 'none';
+      const b = currentBbox();
+      fitTo(b);
+      drawBbox(b, sel === 'custom');
+      if (sel !== 'custom') setInputs(b);
+    };
+    document.getElementById('showbbox').onchange = () => { drawBbox(currentBbox(), document.getElementById('bbox').value === 'custom'); };
 
+    document.getElementById('applyFromMap').onclick = () => {
+      if (!bboxRect) return;
+      const bb = bboxRect.getBounds();
+      const s = bb.getSouthWest();
+      const n = bb.getNorthEast();
+      setInputs({ minLat: s.lat, minLon: s.lng, maxLat: n.lat, maxLon: n.lng });
+    };
+    document.getElementById('applyToMap').onclick = () => {
+      const b = currentBbox();
+      drawBbox(b, true);
+      fitTo(b);
+    };
+
+    // initialise custom panel with current bbox
+    setInputs(BBOXES.gewenst);
+    document.getElementById('customPanel').style.display = (document.getElementById('bbox').value === 'custom') ? 'block' : 'none';
+
+    // demo fallback retains trails
     function demoOnce() {
       const b = currentBbox();
       const rnd = (min, max) => min + Math.random() * (max - min);
