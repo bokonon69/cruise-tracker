@@ -1,9 +1,14 @@
 {
-  "name": "lloydkade-tracker",
+  "name": "lloydkade-live-tracker",
+  "version": "0.1.0",
   "private": true,
-  "version": "1.2.0",
-  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "start": "netlify dev",
+    "build": "echo 'static site'"
+  },
   "dependencies": {
     "ws": "^8.18.0"
-  }
+  },
+  "devDependencies": {}
 }

@@ -1,170 +1,208 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>lloydkade live — publiek</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <title>lloydkade live tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b1320; color:#e7eefc; }
-    .wrap { display:grid; grid-template-columns: 340px 1fr; gap:10px; height:100vh; padding:10px; box-sizing: border-box; }
-    .panel { background:#111a2e; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px; display:flex; flex-direction:column; }
-    #map { border-radius:14px; overflow:hidden; position:relative; }
-    .h { font-weight:700; margin-bottom:8px; }
-    .muted { color:#9fb3d1; font-size:12px; }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    input, select, button { width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#0d1a38; color:#e7eefc; padding:8px 10px; }
-    button { background:#17335f; cursor:pointer; }
-    .list { overflow:auto; margin-top:8px; display:grid; gap:8px; }
-    .ship { background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:10px; display:grid; grid-template-columns: 1fr auto; gap:6px; align-items:center; }
-    .name { font-weight:600; }
-    .chip { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.1); background:#0d2247; color:#90caf9; }
-    .status { font-size:12px; color:#9fb3d1; margin-top:6px; }
-    .legend { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:#9fb3d1; }
-    .bar { height:8px; width:140px; border-radius:6px; background: linear-gradient(90deg, #5e6c89 0%, #31a354 35%, #ffd54f 60%, #ff7043 85%, #ff1744 100%); }
-    .toast { position: fixed; right: 16px; bottom: 16px; background: #10203f; border:1px solid rgba(255,255,255,.12); color:#e7eefc; padding:10px 12px; border-radius:10px; }
-    a { color:#90caf9; text-decoration:none; }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #app { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
+    header { grid-column: 1 / span 2; padding: .6rem .9rem; border-bottom: 1px solid #e5e7eb; display:flex; gap:.75rem; align-items: center; flex-wrap: wrap; }
+    aside { border-right: 1px solid #e5e7eb; overflow: auto; }
+    main { position: relative; }
+    #map { position:absolute; inset:0; }
+    footer { grid-column: 1 / span 2; border-top: 1px solid #e5e7eb; padding: .5rem .9rem; display:flex; justify-content: space-between; gap:.75rem; font-size: 14px; }
+    .controls label { margin-right: .5rem; font-size: 14px; }
+    .list { padding:.5rem; }
+    .list-item { padding:.4rem .3rem; border-bottom: 1px dashed #eee; cursor: pointer; }
+    .list-item:hover { background:#fafafa; }
+    .badge { display:inline-block; padding:.15rem .4rem; border-radius: 999px; background:#eef2ff; font-size:12px; margin-left:.4rem; }
+    .error { color: #b91c1c; }
+    button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
+    select, input[type="number"] { padding:.25rem .35rem; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="panel">
-      <div class="h">lloydkade — publiek</div>
-      <div class="muted">data via netlify function. api-key blijft server-side.</div>
-
-      <label style="margin-top:8px;">update-interval (s)</label>
-      <div class="row">
-        <input id="interval" type="number" min="3" value="5" />
-        <button id="btnStart">start</button>
+  <div id="app">
+    <header>
+      <strong>lloydkade live tracker</strong>
+      <div class="controls">
+        <label>bbox:
+          <select id="bbox">
+            <option value="normaal">normaal</option>
+            <option value="smal">smal</option>
+            <option value="ruim">ruim</option>
+          </select>
+        </label>
+        <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
+        <button id="start">start</button>
+        <button id="stop" disabled>stop</button>
+        <span id="status"></span>
       </div>
-
-      <label style="margin-top:8px;">bbox-profiel</label>
-      <div class="row">
-        <select id="bboxProfile">
-          <option value="smal">smal (lloydkade)</option>
-          <option value="normaal" selected>normaal</option>
-          <option value="ruim">ruim (rijnhaven↔maastunnel)</option>
-        </select>
-        <button id="btnRefresh">ververs</button>
-      </div>
-
-      <div class="legend"><div class="bar"></div><div>kleur = snelheid (kn)</div></div>
-
-      <div class="status" id="status">status: idle</div>
+    </header>
+    <aside>
       <div class="list" id="list"></div>
-    </div>
-    <div id="map"></div>
+    </aside>
+    <main>
+      <div id="map"></div>
+    </main>
+    <footer>
+      <div>schepen: <span id="count">0</span></div>
+      <div>latency: <span id="latency">–</span> ms</div>
+    </footer>
   </div>
 
-  <div id="toast" class="toast" style="display:none;"></div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    // panes voor klikbare markers
-    const map = L.map('map', { preferCanvas:false }); // vector pane interactiever
-    map.createPane('markerPane');
-    map.getPane('markerPane').style.zIndex = 650; // boven overlays
-    map.setView([51.9062, 4.4630], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
-
-    const profiles = {
-      smal:   { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 },
-      normaal:{ minLat: 51.9010, maxLat: 51.9120, minLon: 4.4400, maxLon: 4.4800 },
-      ruim:   { minLat: 51.8985, maxLat: 51.9150, minLon: 4.4300, maxLon: 4.4950 }
+    const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
+    const BBOXES = {
+      smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
+      normaal:{ ...DEFAULTS },
+      ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 }
     };
-    let bbox = profiles.normaal;
-    let bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {pane:'overlayPane', color:'#90caf9', weight:1, fillOpacity:.04, interactive:false}).addTo(map);
 
-    const markers = new Map();
+    const map = L.map('map');
+    const tile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
 
-    function vesselFinderUrl(mmsi){ return `https://www.vesselfinder.com/vessels?mmsi=${encodeURIComponent(mmsi)}`; }
-    function sogColor(kn) {
-      const v = Math.max(0, Math.min(15, Number.isFinite(kn) ? kn : 0));
-      if (v <= 0.3) return "#5e6c89";
-      if (v <= 3)   return "#31a354";
-      if (v <= 8)   return "#ffd54f";
-      if (v <= 15)  return "#ff7043";
-      return "#ff1744";
+    let markers = new Map();
+    let pollTimer = null;
+
+    function fitTo(b) {
+      const sw = L.latLng(b.minLat, b.minLon);
+      const ne = L.latLng(b.maxLat, b.maxLon);
+      map.fitBounds(L.latLngBounds(sw, ne));
     }
 
-    function upsert(s) {
-      const color = sogColor(s.sog);
-      const opts = { pane:'markerPane', radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 1, bubblingMouseEvents: true };
-      let mk = markers.get(s.mmsi);
-      if (!mk) {
-        mk = L.circleMarker([s.lat, s.lon], opts).addTo(map);
-        mk.on('click', () => mk.openPopup());
-        mk.bindPopup(`<b>${(s.name||'onbekend').trim()}</b><br>MMSI:${s.mmsi||'—'}<br>Type:${s.type||'—'}<br>SOG:${Number.isFinite(s.sog)?s.sog.toFixed(1)+' kn':'—'}<br>COG:${s.cog!=null?Math.round(s.cog)+'°':'—'}<br><a target="_blank" href="${vesselFinderUrl(s.mmsi)}">open in vesselfinder</a>`);
-        mk.bringToFront();
-        markers.set(s.mmsi, mk);
-      } else {
-        mk.setLatLng([s.lat, s.lon]);
-        mk.setStyle(opts);
+    fitTo(BBOXES.normaal);
+
+    function fmt(n, d=1){ return (n==null || Number.isNaN(n)) ? '–' : Number(n).toFixed(d); }
+
+    function vesselfinder(mmsi) {
+      return `https://www.vesselfinder.com/?mmsi=${encodeURIComponent(mmsi)}`;
+    }
+
+    async function snapshot(bbox, windowMs=6000) {
+      const url = new URL('/.netlify/functions/ais-snapshot', window.location.origin);
+      Object.entries({ ...bbox, windowMs }).forEach(([k,v]) => url.searchParams.set(k, v));
+      const t0 = performance.now();
+      const res = await fetch(url, { cache: 'no-store' });
+      const latency = Math.round(performance.now() - t0);
+      document.getElementById('latency').textContent = latency;
+      if (!res.ok) {
+        throw new Error(`http ${res.status}`);
+      }
+      return res.json();
+    }
+
+    function renderList(items) {
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      items.sort((a,b) => (b.sog||0)-(a.sog||0));
+      for (const v of items) {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)}`;
+        div.onclick = () => {
+          const m = markers.get(v.mmsi);
+          if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
+        };
+        el.appendChild(div);
       }
     }
 
-    function renderList(arr) {
-      const el = document.getElementById('list'); el.innerHTML='';
-      arr.sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(s=>{
-        const row = document.createElement('div'); row.className='ship';
-        row.innerHTML = `<div><div class="name">${(s.name||'onbekend').trim()} <span class="chip">${s.mmsi||''}</span> <a target="_blank" href="${vesselFinderUrl(s.mmsi)}">detail</a></div>
-          <div class="muted">${s.type||'type n.b.'} • koers ${s.cog!=null?Math.round(s.cog)+'°':'—'} • ${Number.isFinite(s.sog)?s.sog.toFixed(1)+' kn':'—'}</div></div>
-          <div class="chip">${new Date(s.ts||Date.now()).toLocaleTimeString()}</div>`;
-        el.appendChild(row);
-      });
+    function renderMarkers(items) {
+      for (const [mmsi, mk] of markers.entries()) {
+        if (!items.find(v => v.mmsi === mmsi)) {
+          map.removeLayer(mk);
+          markers.delete(mmsi);
+        }
+      }
+      for (const v of items) {
+        const latlng = [v.lat, v.lon];
+        const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vesselfinder(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
+        const existing = markers.get(v.mmsi);
+        if (existing) {
+          existing.setLatLng(latlng).bindPopup(popup);
+        } else {
+          const mk = L.circleMarker(latlng, { radius: 6, weight: 1 });
+          mk.addTo(map).bindPopup(popup);
+          markers.set(v.mmsi, mk);
+        }
+      }
+      document.getElementById('count').textContent = String(items.length);
     }
 
-    function toast(msg) {
-      const t = document.querySelector('.toast');
-      t.textContent = msg; t.style.display = 'block';
-      setTimeout(() => t.style.display = 'none', 3000);
+    function status(msg, isError=false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = isError ? 'error' : '';
     }
 
-    function apiUrl() {
-      return `/.netlify/functions/ais-snapshot?minLat=${bbox.minLat}&maxLat=${bbox.maxLat}&minLon=${bbox.minLon}&maxLon=${bbox.maxLon}&windowMs=6000`;
+    function currentBbox() {
+      const sel = document.getElementById('bbox').value;
+      return BBOXES[sel] || BBOXES.normaal;
     }
 
-    let timer = null;
-    async function fetchSnapshot() {
-      const url = apiUrl();
+    function currentIntervalMs() {
+      const v = parseInt(document.getElementById('interval').value, 10);
+      return Math.min(Math.max(v || 5, 2), 60) * 1000;
+    }
+
+    async function tick() {
+      const bbox = currentBbox();
       try {
-        const t0 = performance.now();
-        const r = await fetch(url, { cache:'no-store' });
-        const json = await r.json();
-        if (!json.ok) { document.getElementById('status').textContent = 'status: fout — ' + (json.error || r.status); return; }
-
-        // notify new
-        const ids = new Set((json.data||[]).map(s => s.mmsi));
-        ids.forEach(id => { if (!markers.has(id)) toast('nieuw schip: '+id); });
-
-        (json.data||[]).forEach(upsert);
-        renderList(json.data||[]);
-
-        document.getElementById('status').textContent = `status: ${json.count} schepen • ${(performance.now()-t0).toFixed(0)}ms`;
+        const res = await snapshot(bbox, 6000);
+        status(`ok (${res.count})`);
+        renderMarkers(res.data || []);
+        renderList(res.data || []);
       } catch (e) {
-        document.getElementById('status').textContent = 'status: netwerkfout';
+        status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
+        demoOnce();
       }
     }
 
-    function setProfile(p){
-      bbox = profiles[p] || profiles.normaal;
-      if (bboxRect) bboxRect.remove();
-      bboxRect = L.rectangle([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]], {pane:'overlayPane', color:'#90caf9', weight:1, fillOpacity:.04, interactive:false}).addTo(map);
-      map.fitBounds([[bbox.minLat, bbox.minLon],[bbox.maxLat,bbox.maxLon]]);
-      map.invalidateSize();
-      fetchSnapshot();
+    function start() {
+      if (pollTimer) return;
+      document.getElementById('start').disabled = true;
+      document.getElementById('stop').disabled = false;
+      tick();
+      pollTimer = setInterval(tick, currentIntervalMs());
     }
 
-    document.getElementById('btnStart').addEventListener('click', ()=>{
-      const secs = Math.max(3, parseInt(document.getElementById('interval').value||'5',10));
-      if (timer) clearInterval(timer);
-      fetchSnapshot();
-      timer = setInterval(fetchSnapshot, secs*1000);
-      document.getElementById('status').textContent = 'status: polling gestart';
-      map.invalidateSize();
-    });
-    document.getElementById('btnRefresh').addEventListener('click', ()=> setProfile(document.getElementById('bboxProfile').value));
-    setProfile('normaal');
+    function stop() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+      document.getElementById('start').disabled = false;
+      document.getElementById('stop').disabled = true;
+      status('gestopt');
+    }
+
+    document.getElementById('start').onclick = start;
+    document.getElementById('stop').onclick = stop;
+    document.getElementById('bbox').onchange = () => { fitTo(currentBbox()); };
+
+    function demoOnce() {
+      const b = currentBbox();
+      const rnd = (min, max) => min + Math.random() * (max - min);
+      const names = ['Demo I', 'Demo II', 'Demo III', 'Demo IV'];
+      const items = names.map((n, i) => ({
+        mmsi: `999000${i+1}`,
+        name: n,
+        lat: rnd(b.minLat, b.maxLat),
+        lon: rnd(b.minLon, b.maxLon),
+        sog: Math.round(rnd(0, 18)*10)/10,
+        cog: Math.round(rnd(0, 359)),
+        type: 'Demo',
+        ts: Date.now()
+      }));
+      renderMarkers(items);
+      renderList(items);
+    }
   </script>
 </body>
 </html>

@@ -1,108 +1,146 @@
+const WebSocket = require('ws');
 
-const WebSocket = require("ws");
-
-/**
- * Snapshot AIS for a bbox.
- * Accepts many AIS shapes: PositionReport, ClassAPositionReport, StandardClassBPositionReport,
- * ExtendedClassBPositionReport, ShipPosition.
- * Returns small normalized objects.
- */
 exports.handler = async (event) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Content-Type": "application/json"
-  };
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" };
-
-  const key = process.env.AISSTREAM_API_KEY;
-  if (!key) return { statusCode: 500, headers, body: JSON.stringify({ ok:false, error:"server missing AISSTREAM_API_KEY" }) };
-
-  const qs = event.queryStringParameters || {};
-  const minLat = parseFloat(qs.minLat ?? "51.9010");
-  const maxLat = parseFloat(qs.maxLat ?? "51.9120");
-  const minLon = parseFloat(qs.minLon ?? "4.4400");
-  const maxLon = parseFloat(qs.maxLon ?? "4.4800");
-  const windowMs = Math.min(parseInt(qs.windowMs ?? "6000"), 12000);
-
-  const positions = new Map();
-  const within = (lat, lon) => lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
-
-  const shipTypeMap = (code) => {
-    const c = Number(code);
-    if (!Number.isFinite(c)) return "";
-    if (c >= 60 && c < 70) return "passenger";
-    if (c >= 70 && c < 80) return "cargo";
-    if (c >= 80 && c < 90) return "tanker";
-    if (c === 31) return "tug";
-    if (c === 50) return "pilot";
-    return String(c);
-  };
-
-  function parseMessage(d) {
-    try {
-      const obj = JSON.parse(d);
-      if (!obj) return;
-      if (obj.error) { positions.set("__error__", { error: obj.error }); return; }
-
-      const meta = obj.MetaData || obj.Metadata || {};
-      const msg  = obj.Message || {};
-
-      const pr = msg.ShipPosition
-              || msg.PositionReport
-              || msg.ClassAPositionReport
-              || msg.StandardClassBPositionReport
-              || msg.ExtendedClassBPositionReport;
-
-      const sd = msg.ShipStaticData || {};
-      const mmsi = meta.MMSI || meta.Mmsi || obj.MMSI || obj.mmsi;
-      const name = (meta.ShipName || sd.ShipName || "").trim();
-      const type = sd.ShipType != null ? shipTypeMap(sd.ShipType) : "";
-
-      if (pr && typeof pr.Latitude === "number" && typeof pr.Longitude === "number") {
-        const lat = pr.Latitude;
-        const lon = pr.Longitude;
-        if (!within(lat, lon)) return;
-
-        const sog = (typeof pr.Sog === "number") ? pr.Sog
-                   : (typeof pr.SpeedOverGround === "number") ? pr.SpeedOverGround : null;
-        const cog = (typeof pr.Cog === "number") ? pr.Cog
-                   : (typeof pr.CourseOverGround === "number") ? pr.CourseOverGround : null;
-
-        const k = mmsi || (name ? `NONMMSI:${name}` : `ghost:${Math.random()}`);
-        positions.set(k, { mmsi:k, name: name || `MMSI ${k}`, lat, lon, sog, cog, type, ts: Date.now() });
-      }
-    } catch {}
-  }
-
   try {
-    const ws = new WebSocket("wss://stream.aisstream.io/v0/stream", { handshakeTimeout: 5000 });
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, headers: corsHeaders(), body: '' };
+    }
 
-    const done = new Promise((resolve) => {
-      const timer = setTimeout(() => { try { ws.close(); } catch {} ; resolve(); }, windowMs);
-      ws.on("open", () => {
-        // Minimal subscription: APIKey + BoundingBoxes (lat,lon). No type filters → get all supported types.
-        const subscription = {
-          APIKey: key,
-          BoundingBoxes: [[[maxLat, minLon], [minLat, maxLon]]]
-        };
-        try { ws.send(JSON.stringify(subscription)); } catch {}
+    if (event.httpMethod !== 'GET') {
+      return json(405, { ok: false, error: 'method-not-allowed' });
+    }
+
+    const apiKey = process.env.AISSTREAM_API_KEY;
+    if (!apiKey) return json(502, { ok: false, error: 'missing-aisstream-api-key' });
+
+    const qp = new URLSearchParams(event.queryStringParameters || {});
+
+    const defaults = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
+    const minLat = num(qp.get('minLat'), defaults.minLat);
+    const maxLat = num(qp.get('maxLat'), defaults.maxLat);
+    const minLon = num(qp.get('minLon'), defaults.minLon);
+    const maxLon = num(qp.get('maxLon'), defaults.maxLon);
+
+    let windowMs = Math.min(Math.max(num(qp.get('windowMs'), 6000), 1000), 10000);
+
+    const bbox = [ [ [maxLat, minLon], [minLat, maxLon] ] ];
+
+    const url = 'wss://stream.aisstream.io/v0/stream';
+
+    const collected = [];
+    const startedAt = Date.now();
+
+    const ws = new WebSocket(url);
+
+    const closeAfter = () => {
+      try { ws.close(); } catch {}
+    };
+
+    const timeoutId = setTimeout(closeAfter, windowMs);
+
+    const subscribePayload = {
+      APIKey: apiKey,
+      BoundingBoxes: bbox
+    };
+
+    const ready = new Promise((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify(subscribePayload));
       });
-      ws.on("message", data => parseMessage(data));
-      ws.on("error", () => { clearTimeout(timer); resolve(); });
-      ws.on("close", () => { clearTimeout(timer); resolve(); });
+
+      ws.on('message', (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          const item = normalizeAisMessage(msg);
+          if (!item) return;
+          if (inBbox(item.lat, item.lon, { minLat, maxLat, minLon, maxLon })) {
+            collected.push(item);
+          }
+        } catch (e) {
+        }
+      });
+
+      ws.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+
+      ws.on('close', () => {
+        clearTimeout(timeoutId);
+        resolve();
+      });
     });
 
-    await done;
-    const error = positions.get("__error__");
-    if (error) {
-      positions.delete("__error__");
-      return { statusCode: 502, headers, body: JSON.stringify({ ok:false, error:error.error }) };
+    await ready;
+
+    const byMmsi = new Map();
+    for (const v of collected) {
+      const prev = byMmsi.get(v.mmsi);
+      if (!prev || (v.ts || 0) > (prev.ts || 0)) byMmsi.set(v.mmsi, v);
     }
-    const out = Array.from(positions.values());
-    return { statusCode: 200, headers, body: JSON.stringify({ ok:true, count: out.length, minLat, maxLat, minLon, maxLon, data: out }) };
+
+    const data = Array.from(byMmsi.values());
+
+    return json(200, {
+      ok: true,
+      count: data.length,
+      minLat, maxLat, minLon, maxLon,
+      windowMs,
+      durationMs: Date.now() - startedAt,
+      data
+    });
   } catch (e) {
-    return { statusCode: 502, headers, body: JSON.stringify({ ok:false, error: e?.message || "proxy error" }) };
+    return json(502, { ok: false, error: String(e && e.message || e) });
   }
 };
+
+function json(statusCode, obj) {
+  return {
+    statusCode,
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj)
+  };
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
+}
+
+function num(v, d) { const n = parseFloat(v); return Number.isFinite(n) ? n : d; }
+
+function inBbox(lat, lon, { minLat, maxLat, minLon, maxLon }) {
+  return lat <= maxLat && lat >= minLat && lon >= minLon && lon <= maxLon;
+}
+
+function normalizeAisMessage(msg) {
+  const md = msg.MetaData || msg.metadata || {};
+  const m = msg.Message || msg.message || msg.Body || msg.body || {};
+
+  let lat = undefined, lon = undefined;
+  if (m.Position && isNum(m.Position.lat) && isNum(m.Position.lon)) {
+    lat = +m.Position.lat; lon = +m.Position.lon;
+  } else if (isNum(m.Latitude) && isNum(m.Longitude)) {
+    lat = +m.Latitude; lon = +m.Longitude;
+  } else if (m.position && isNum(m.position.lat) && isNum(m.position.lon)) {
+    lat = +m.position.lat; lon = +m.position.lon;
+  }
+
+  if (!isNum(lat) || !isNum(lon)) return null;
+
+  const sog = pickNum(m.Sog, m.sog, m.SpeedOverGround, m.speed, m.speed_over_ground);
+  const cog = pickNum(m.Cog, m.cog, m.CourseOverGround, m.course, m.course_over_ground);
+  const type = pickStr(m.ShipType, m.shipType, m.Type, m.type, m.VesselType);
+  const mmsi = pickStr(md.MMSI, md.Mmsi, md.mmsi, m.MMSI, m.mmsi);
+  const name = pickStr(md.ShipName, md.Name, md.shipName, m.ShipName, m.Name, m.name);
+  const ts = pickNum(md.Timestamp, md.Time, md.ts, m.Timestamp, m.Time, m.ts) || Date.now();
+
+  return { mmsi: mmsi ? String(mmsi) : undefined, name: name || '', lat: +lat, lon: +lon, sog: sog ?? null, cog: cog ?? null, type: type || '', ts: ts };
+}
+
+function isNum(v) { return Number.isFinite(+v); }
+function pickNum(...vals) { for (const v of vals) { const n = +v; if (Number.isFinite(n)) return n; } return undefined; }
+function pickStr(...vals) { for (const v of vals) { if (v !== undefined && v !== null) return String(v); } return undefined; }
