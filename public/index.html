@@ -20,6 +20,7 @@
     .list-item:hover { background:#fafafa; }
     .error { color: #b91c1c; }
     button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
+    button.active { background:#111827; color:#fff; border-color:#111827; }
     select, input[type="number"], input[type="text"] { padding:.25rem .35rem; }
     .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.25rem .5rem; }
     .muted { opacity:.75; font-size:12px; }
@@ -44,7 +45,7 @@
         <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
         <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
         <label>trail (punten): <input id="trailLen" type="number" min="3" max="30" step="1" value="8" /></label>
-        <button id="presetHide">Hide moored</button>
+        <button id="presetHide" class="active">Hide moored</button>
         <button id="presetShow">Show all</button>
         <button id="start">start</button>
         <button id="stop" disabled>stop</button>
@@ -371,6 +372,7 @@
       if (pollTimer) return;
       TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||45)*1000, 5000), 600000);
       SHOW_ALL = false; // default: hide moored
+      setActiveButtons();
       document.getElementById('start').disabled = true;
       document.getElementById('stop').disabled = false;
       tick();
@@ -386,6 +388,11 @@
       status('gestopt');
     }
 
+    function setActiveButtons() {
+      document.getElementById('presetHide').classList.toggle('active', !SHOW_ALL);
+      document.getElementById('presetShow').classList.toggle('active', SHOW_ALL);
+    }
+
     document.getElementById('start').onclick = start;
     document.getElementById('stop').onclick = stop;
     document.getElementById('bbox').onchange = () => {
@@ -397,8 +404,8 @@
       if (sel !== 'custom') setInputs(b);
     };
     document.getElementById('showbbox').onchange = () => { drawBbox(currentBbox(), document.getElementById('bbox').value === 'custom'); };
-    document.getElementById('presetHide').onclick = () => { SHOW_ALL = False; renderAll(); };
-    document.getElementById('presetShow').onclick = () => { SHOW_ALL = true; renderAll(); };
+    document.getElementById('presetHide').onclick = () => { SHOW_ALL = false; setActiveButtons(); renderAll(); };
+    document.getElementById('presetShow').onclick = () => { SHOW_ALL = true; setActiveButtons(); renderAll(); };
 
     document.getElementById('applyFromMap').onclick = () => {
       if (!bboxRect) return;

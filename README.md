@@ -1,7 +1,10 @@
-# Lloydkade Live Tracker — hide moored / show all
+# Lloydkade Live Tracker — hide moored / show all (fix)
 
-Simplified filtering:
-- **Hide moored (default):** toont alleen schepen met SOG > 0.8 kn en een geldige SOG-waarde.
-- **Show all:** toont alle schepen, inclusief SOG ≤ 0.8 en schepen zonder SOG.
+Fixes:
+- Knop-handlers werken nu correct (`false` i.p.v. `False`).
+- Actieve knop krijgt visuele state.
+- Filtering toegepast via centrale `renderAll()`.
 
-Overige features behouden: pijlen (COG), instelbare trail-lengte, saved/custom-profielen, TTL, bbox overlay, editable rectangle.
+Modes:
+- **Hide moored (default):** alleen SOG > 0.8 kn met geldige SOG.
+- **Show all:** alles tonen, ook SOG ≤ 0.8 en zonder SOG.
