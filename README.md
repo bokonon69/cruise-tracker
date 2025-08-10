@@ -1,9 +1,7 @@
-# Lloydkade Live Tracker — saved profiles + arrows
+# Lloydkade Live Tracker — SOG filter v2
 
-Features:
-- Sticky vessels with TTL
-- Mini-trails (length adjustable)
-- Direction arrows from COG
-- Profiles: smal, normaal, ruim, gewenst + custom named profiles (saved in localStorage)
-- Set any saved profile as default
-- Bbox overlay toggle and editable rectangle
+Nieuw:
+- Toggle **include null SOG** (aan = schepen zonder SOG blijven zichtbaar)
+- Presets: **Hide moored** (0.8 kn, include-null uit) en **Show all** (0.0 kn, include-null aan)
+
+Alles uit eerdere builds blijft behouden (pijlen, trails, saved/custom-profielen, TTL, bbox overlay).

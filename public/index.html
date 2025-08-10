@@ -44,6 +44,10 @@
         <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
         <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
         <label>trail (punten): <input id="trailLen" type="number" min="3" max="30" step="1" value="8" /></label>
+        <label>SOG-filter (kn): <input id="sogFilter" type="range" min="0" max="3" step="0.1" value="0.8"> <span id="sogVal">0.8</span></label>
+        <label>include null SOG: <input id="includeNullSog" type="checkbox" /></label>
+        <button id="presetHide">Hide moored</button>
+        <button id="presetShow">Show all</button>
         <button id="start">start</button>
         <button id="stop" disabled>stop</button>
         <span id="status"></span>
@@ -98,10 +102,12 @@
       gewenst:{ minLat: 51.9039, maxLat: 51.9078, minLon: 4.4548, maxLon: 4.4725 }
     };
 
-    // persistent store + arrows + trails
+    // persistent store
     const STORE = new Map(); // mmsi -> { ...v, lastSeen, trail: [[lat,lon], ...] }
     let TTL_MS = 45000;
     let TRAIL_LEN = 8;
+    let SOG_THRESHOLD = 0.8;
+    let INCLUDE_NULL_SOG = false;
 
     const map = L.map('map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -118,18 +124,10 @@
     // saved profiles in localStorage
     const LS_KEY = 'lloydkade_profiles_v1';
     const LS_DEFAULT = 'lloydkade_default_profile_v1';
-    function loadSavedProfiles() {
-      try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; }
-    }
-    function saveSavedProfiles(obj) {
-      localStorage.setItem(LS_KEY, JSON.stringify(obj));
-    }
-    function getDefaultProfileName() {
-      return localStorage.getItem(LS_DEFAULT) || null;
-    }
-    function setDefaultProfileName(name) {
-      localStorage.setItem(LS_DEFAULT, name);
-    }
+    function loadSavedProfiles() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } }
+    function saveSavedProfiles(obj) { localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
+    function getDefaultProfileName() { return localStorage.getItem(LS_DEFAULT) || null; }
+    function setDefaultProfileName(name) { localStorage.setItem(LS_DEFAULT, name); }
 
     function populateSavedProfilesSelect() {
       const sel = document.getElementById('savedProfiles');
@@ -143,7 +141,6 @@
       }
     }
 
-    // --- bbox helpers ---
     function fitTo(b) {
       const sw = L.latLng(b.minLat, b.minLon);
       const ne = L.latLng(b.maxLat, b.maxLon);
@@ -195,13 +192,11 @@
           maxLon: v.maxLon || DEFAULTS.maxLon
         };
       }
-      // base or saved profile
       const saved = loadSavedProfiles();
       if (saved[sel]) return saved[sel];
       return BASE_PROFILES[sel] || BASE_PROFILES.gewenst;
     }
 
-    // initialise selection by default profile if exists
     (function initDefaultProfile() {
       populateSavedProfilesSelect();
       const def = getDefaultProfileName();
@@ -258,6 +253,15 @@
       }
     }
 
+    // --- SOG filter ---
+    function applySogFilter(items) {
+      return items.filter(v => {
+        const hasSog = v.sog !== null && v.sog !== undefined && !Number.isNaN(v.sog);
+        if (!hasSog) return INCLUDE_NULL_SOG; // show if toggle is ON
+        return v.sog > SOG_THRESHOLD;
+      });
+    }
+
     function renderList(items) {
       const el = document.getElementById('list');
       el.innerHTML = '';
@@ -270,7 +274,8 @@
         div.className = 'list-item';
         div.style.opacity = dim;
         const since = Math.round(age/1000);
-        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)} · ${since}s geleden`;
+        const sogTxt = (v.sog==null || Number.isNaN(v.sog)) ? '–' : fmt(v.sog);
+        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${sogTxt} kn · COG ${fmt(v.cog)} · ${since}s geleden`;
         div.onclick = () => {
           const m = markers.get(v.mmsi);
           if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
@@ -280,10 +285,9 @@
       document.getElementById('count').textContent = String(items.length);
     }
 
-    // helper to compute arrow endpoint from lat/lon and cog (degrees)
-    function endpointFromCog(lat, lon, cogDeg, meters=80) {
+    function endpointFromCog(lat, lon, cogDeg, meters=100) {
       if (!Number.isFinite(cogDeg)) return [lat, lon];
-      const R = 6378137; // meters
+      const R = 6378137;
       const brng = cogDeg * Math.PI/180;
       const lat1 = lat * Math.PI/180;
       const lon1 = lon * Math.PI/180;
@@ -313,7 +317,7 @@
           markers.set(v.mmsi, mk);
         }
 
-        // trail polyline
+        // trail
         let pl = trails.get(v.mmsi);
         const tl = (v.trail || []).map(([la,lo]) => [la,lo]);
         if (pl) {
@@ -324,9 +328,9 @@
           trails.set(v.mmsi, pl);
         }
 
-        // direction arrow line from position to endpoint
+        // arrow
         let ar = arrows.get(v.mmsi);
-        const end = endpointFromCog(v.lat, v.lon, v.cog, 100); // 100m arrow
+        const end = endpointFromCog(v.lat, v.lon, v.cog, 100);
         if (ar) {
           ar.setLatLngs([latlng, end]).setStyle({ opacity: Math.max(0.3, opacity) });
         } else {
@@ -345,15 +349,20 @@
 
     function currentIntervalMs() { return Math.min(Math.max(parseInt(document.getElementById('interval').value,10)||5,2),60)*1000; }
 
+    function renderAll() {
+      const active = Array.from(STORE.values());
+      const filtered = applySogFilter(active);
+      renderGraphics(filtered);
+      renderList(filtered);
+    }
+
     async function tick() {
       const bbox = currentBbox();
       try {
         const res = await snapshot(bbox, 6000);
         status(`ok (${res.count})`);
         updateStore(res.data || [], bbox);
-        const active = Array.from(STORE.values());
-        renderGraphics(active);
-        renderList(active);
+        renderAll();
       } catch (e) {
         status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
         demoOnce();
@@ -363,6 +372,8 @@
     function start() {
       if (pollTimer) return;
       TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||45)*1000, 5000), 600000);
+      SOG_THRESHOLD = Math.min(Math.max(parseFloat(document.getElementById('sogFilter').value)||0.8, 0), 3);
+      INCLUDE_NULL_SOG = !!document.getElementById('includeNullSog').checked;
       document.getElementById('start').disabled = true;
       document.getElementById('stop').disabled = false;
       tick();
@@ -389,6 +400,29 @@
       if (sel !== 'custom') setInputs(b);
     };
     document.getElementById('showbbox').onchange = () => { drawBbox(currentBbox(), document.getElementById('bbox').value === 'custom'); };
+    document.getElementById('sogFilter').oninput = (e) => {
+      SOG_THRESHOLD = parseFloat(e.target.value);
+      document.getElementById('sogVal').textContent = SOG_THRESHOLD.toFixed(1);
+      renderAll();
+    };
+    document.getElementById('includeNullSog').onchange = (e) => {
+      INCLUDE_NULL_SOG = !!e.target.checked;
+      renderAll();
+    };
+    document.getElementById('presetHide').onclick = () => {
+      document.getElementById('sogFilter').value = 0.8;
+      document.getElementById('sogVal').textContent = '0.8';
+      document.getElementById('includeNullSog').checked = false;
+      SOG_THRESHOLD = 0.8; INCLUDE_NULL_SOG = false;
+      renderAll();
+    };
+    document.getElementById('presetShow').onclick = () => {
+      document.getElementById('sogFilter').value = 0.0;
+      document.getElementById('sogVal').textContent = '0.0';
+      document.getElementById('includeNullSog').checked = true;
+      SOG_THRESHOLD = 0.0; INCLUDE_NULL_SOG = true;
+      renderAll();
+    };
 
     document.getElementById('applyFromMap').onclick = () => {
       if (!bboxRect) return;
@@ -404,6 +438,17 @@
     };
 
     // profile save/load/delete/default
+    function loadSavedProfilesSelect() {
+      const sel = document.getElementById('savedProfiles');
+      sel.innerHTML = '';
+      const saved = loadSavedProfiles();
+      const names = Object.keys(saved).sort();
+      for (const n of names) {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      }
+    }
     document.getElementById('saveProfile').onclick = () => {
       const name = (document.getElementById('profileName').value || '').trim();
       if (!name) return alert('voer een profielnaam in');
@@ -411,8 +456,7 @@
       const saved = loadSavedProfiles();
       saved[name] = vals;
       saveSavedProfiles(saved);
-      populateSavedProfilesSelect();
-      // voeg optie toe in selector voor direct gebruik
+      loadSavedProfilesSelect();
       const sel = document.getElementById('bbox');
       let opt = Array.from(sel.options).find(o => o.value === name);
       if (!opt) {
@@ -421,6 +465,8 @@
         sel.appendChild(opt);
       }
       sel.value = name;
+      const b = currentBbox();
+      fitTo(b); drawBbox(b);
     };
     document.getElementById('setDefault').onclick = () => {
       const sel = document.getElementById('bbox').value;
@@ -434,8 +480,7 @@
       const saved = loadSavedProfiles();
       delete saved[selSaved];
       saveSavedProfiles(saved);
-      populateSavedProfilesSelect();
-      // verwijder uit hoofdselector als aanwezig
+      loadSavedProfilesSelect();
       const mainSel = document.getElementById('bbox');
       for (const o of Array.from(mainSel.options)) {
         if (o.value === selSaved) { mainSel.removeChild(o); break; }
@@ -460,6 +505,7 @@
     };
 
     // initialise custom panel with current bbox
+    loadSavedProfilesSelect();
     setInputs(BASE_PROFILES.gewenst);
     document.getElementById('customPanel').style.display = (document.getElementById('bbox').value === 'custom') ? 'block' : 'none';
 
@@ -481,8 +527,7 @@
         trail: [[rnd(b.minLat, b.maxLat), rnd(b.minLon, b.maxLon)]]
       }));
       for (const v of items) STORE.set(v.mmsi, v);
-      renderGraphics(items);
-      renderList(items);
+      renderAll();
     }
   </script>
 </body>
