@@ -35,6 +35,7 @@
           </select>
         </label>
         <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
+        <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
         <button id="start">start</button>
         <button id="stop" disabled>stop</button>
         <span id="status"></span>
@@ -61,13 +62,19 @@
       ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 }
     };
 
+    // persistent client-side store
+    const STORE = new Map(); // mmsi -> { ...v, lastSeen, trail: [[lat,lon], ...] }
+    let TTL_MS = 45000;
+    const TRAIL_LEN = 8; // keep last 8 points
+
     const map = L.map('map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19
     }).addTo(map);
 
-    let markers = new Map();
+    let markers = new Map();   // mmsi -> circleMarker
+    let trails = new Map();    // mmsi -> polyline
     let pollTimer = null;
 
     function fitTo(b) {
@@ -91,13 +98,39 @@
       return res.json();
     }
 
+    function updateStore(items, bbox) {
+      const now = Date.now();
+      for (const v of items) {
+        if (!v.mmsi) continue;
+        const prev = STORE.get(v.mmsi) || {};
+        const trail = (prev.trail || []).slice(-TRAIL_LEN + 1);
+        trail.push([v.lat, v.lon]);
+        STORE.set(v.mmsi, { ...prev, ...v, lastSeen: now, trail });
+      }
+      for (const [mmsi, rec] of STORE) {
+        const expired = now - (rec.lastSeen || 0) > TTL_MS;
+        const outside = rec.lat < bbox.minLat || rec.lat > bbox.maxLat
+                     || rec.lon < bbox.minLon || rec.lon > bbox.maxLon;
+        if (expired || outside) {
+          STORE.delete(mmsi);
+          // remove graphics
+          const mk = markers.get(mmsi); if (mk) { map.removeLayer(mk); markers.delete(mmsi); }
+          const pl = trails.get(mmsi);  if (pl) { map.removeLayer(pl); trails.delete(mmsi); }
+        }
+      }
+    }
+
     function renderList(items) {
       const el = document.getElementById('list');
       el.innerHTML = '';
       items.sort((a,b) => (b.sog||0)-(a.sog||0));
       for (const v of items) {
+        const age = Date.now() - (v.lastSeen||0);
+        const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
+        const dim = (1 - frac).toFixed(2);
         const div = document.createElement('div');
         div.className = 'list-item';
+        div.style.opacity = dim;
         div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${fmt(v.sog)} kn · COG ${fmt(v.cog)}`;
         div.onclick = () => {
           const m = markers.get(v.mmsi);
@@ -105,28 +138,41 @@
         };
         el.appendChild(div);
       }
+      document.getElementById('count').textContent = String(items.length);
     }
 
-    function renderMarkers(items) {
-      for (const [mmsi, mk] of markers.entries()) {
-        if (!items.find(v => v.mmsi === mmsi)) {
-          map.removeLayer(mk);
-          markers.delete(mmsi);
-        }
-      }
+    function renderGraphics(items) {
+      const now = Date.now();
       for (const v of items) {
         const latlng = [v.lat, v.lon];
+        const age = now - (v.lastSeen||0);
+        const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
+        const opacity = Math.max(0.25, 1 - frac * 0.85);
+        const radius = 6 - Math.floor(frac * 2); // a bit smaller when older
+
         const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
-        const existing = markers.get(v.mmsi);
-        if (existing) {
-          existing.setLatLng(latlng).bindPopup(popup);
+
+        let mk = markers.get(v.mmsi);
+        if (mk) {
+          mk.setLatLng(latlng).setStyle({ opacity, fillOpacity: opacity, radius });
+          mk.bindPopup(popup);
         } else {
-          const mk = L.circleMarker(latlng, { radius: 6, weight: 1 });
+          mk = L.circleMarker(latlng, { radius, weight: 1, opacity, fillOpacity: opacity });
           mk.addTo(map).bindPopup(popup);
           markers.set(v.mmsi, mk);
         }
+
+        // trail polyline
+        let pl = trails.get(v.mmsi);
+        const tl = (v.trail || []).map(([la,lo]) => [la,lo]);
+        if (pl) {
+          pl.setLatLngs(tl).setStyle({ opacity: Math.max(0.2, opacity - 0.2) });
+        } else {
+          pl = L.polyline(tl, { weight: 2, opacity: 0.6 });
+          pl.addTo(map);
+          trails.set(v.mmsi, pl);
+        }
       }
-      document.getElementById('count').textContent = String(items.length);
     }
 
     function status(msg, isError=false) {
@@ -143,8 +189,10 @@
       try {
         const res = await snapshot(bbox, 6000);
         status(`ok (${res.count})`);
-        renderMarkers(res.data || []);
-        renderList(res.data || []);
+        updateStore(res.data || [], bbox);
+        const active = Array.from(STORE.values());
+        renderGraphics(active);
+        renderList(active);
       } catch (e) {
         status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
         demoOnce();
@@ -153,6 +201,7 @@
 
     function start() {
       if (pollTimer) return;
+      TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||45)*1000, 5000), 600000);
       document.getElementById('start').disabled = true;
       document.getElementById('stop').disabled = false;
       tick();
@@ -176,6 +225,7 @@
       const b = currentBbox();
       const rnd = (min, max) => min + Math.random() * (max - min);
       const names = ['Demo I', 'Demo II', 'Demo III', 'Demo IV'];
+      const now = Date.now();
       const items = names.map((n, i) => ({
         mmsi: `999000${i+1}`,
         name: n,
@@ -184,9 +234,12 @@
         sog: Math.round(rnd(0, 18)*10)/10,
         cog: Math.round(rnd(0, 359)),
         type: 'Demo',
-        ts: Date.now()
+        ts: now,
+        lastSeen: now,
+        trail: [[rnd(b.minLat, b.maxLat), rnd(b.minLon, b.maxLon)]]
       }));
-      renderMarkers(items);
+      for (const v of items) STORE.set(v.mmsi, v);
+      renderGraphics(items);
       renderList(items);
     }
   </script>

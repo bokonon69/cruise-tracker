@@ -1,6 +1,6 @@
-# Lloydkade Live Tracker
+# Lloydkade Live Tracker (sticky + trails)
 
-Leaflet-frontend + Netlify Functions. Geen API-key in de client.
+Leaflet-frontend + Netlify Functions. Houdt schepen zichtbaar met TTL en tekent mini-trails.
 
 ## Quickstart
 ```bash
