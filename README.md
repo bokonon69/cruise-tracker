@@ -1,10 +1,15 @@
-# Lloydkade Live Tracker — hide moored / show all (fix)
+# Lloydkade Live Tracker — desktop + ios/mobile + pwa
 
-Fixes:
-- Knop-handlers werken nu correct (`false` i.p.v. `False`).
-- Actieve knop krijgt visuele state.
-- Filtering toegepast via centrale `renderAll()`.
+Deze build gebruikt je bestaande desktop UI 1-op-1 en voegt daarbovenop:
+- Responsive mobiele UI (≤768px): full-map, overlay list/settings, FABs, stats overlay
+- iOS/PWA integratie: manifest + service worker + icons
+- Desktop blijft ongewijzigd (sidebar + kaart)
 
-Modes:
-- **Hide moored (default):** alleen SOG > 0.8 kn met geldige SOG.
-- **Show all:** alles tonen, ook SOG ≤ 0.8 en zonder SOG.
+Deploy (Netlify):
+1) Upload/commit alles uit deze map
+2) Zet environment: `AISSTREAM_API_KEY`
+3) Open site → mobiel: topbar met ☰ en ⚙, FABs rechtsonder, stats linksboven
+4) iPhone: “Add to Home Screen” voor fullscreen PWA
+
+Let op: de mobiele FAB “👁” gebruikt je bestaande knoppen “Hide/Show” onder water,
+zodat filtering en lijst/kaart in sync blijven.

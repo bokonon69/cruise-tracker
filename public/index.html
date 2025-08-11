@@ -1,6 +1,14 @@
 <!doctype html>
 <html lang="nl">
 <head>
+  
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f172a">
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>lloydkade live tracker</title>
@@ -25,7 +33,34 @@
     .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.25rem .5rem; }
     .muted { opacity:.75; font-size:12px; }
     .row { display:flex; gap:.5rem; align-items:center; margin-top:.25rem; }
-  </style>
+  
+/* --- mobile mode additions --- */
+@media (max-width: 768px) {
+  #app { display: grid; grid-template-columns: 1fr; grid-template-rows: 48px 1fr 34px; height: 100dvh; }
+  header { grid-column: 1; display:flex; align-items:center; gap:.5rem; }
+  aside { display: none; }
+  main { position: relative; }
+  #map { position:absolute; inset:0; }
+  .topbar-btn { border:0; background:transparent; width:44px; height:44px; border-radius:10px; }
+  .overlay-scrim { position:absolute; inset:0; background:rgba(0,0,0,.35); opacity:0; pointer-events:none; transition:.2s; z-index:4; }
+  .overlay-scrim.show { opacity:1; pointer-events:auto; }
+  .panel { position:absolute; top:0; bottom:0; width:min(88vw,360px); background:#fff; z-index:5; box-shadow:0 10px 30px rgba(0,0,0,.35); display:flex; flex-direction:column; }
+  .panel header { padding:.4rem; border-bottom:1px solid #eee; font-weight:700; }
+  #listPanel { left:0; transform: translateX(-105%); transition: transform .2s ease; }
+  #listPanel.show { transform: translateX(0); }
+  #settingsPanel { right:0; transform: translateX(105%); transition: transform .2s ease; }
+  #settingsPanel.show { transform: translateX(0); }
+  .panel .content { overflow:auto; -webkit-overflow-scrolling:touch; padding:.5rem; }
+  /* stats */
+  .stats-box { position:absolute; top:10px; left:10px; z-index:4; background:rgba(17,24,39,.75); color:#fff; font-size:12px; padding:.5rem .6rem; border-radius:12px; backdrop-filter: blur(6px); }
+  /* fabs */
+  .fabs { position:absolute; right:12px; bottom:12px; z-index:4; display:flex; flex-direction:column; gap:10px; }
+  .fab { width:56px; height:56px; border-radius:50%; border:0; background:#111827; color:#fff; display:grid; place-items:center; box-shadow:0 10px 24px rgba(0,0,0,.3); font-size:20px; }
+  /* compact footer */
+  footer { grid-column: 1; }
+}
+
+</style>
 </head>
 <body>
   <div id="app">
@@ -83,7 +118,31 @@
     </aside>
     <main>
       <div id="map"></div>
-    </main>
+    
+  <!-- mobile overlays -->
+  <div id="scrim" class="overlay-scrim"></div>
+  <div id="listPanel" class="panel">
+    <header>schepen <button id="closeList" style="float:right">✕</button></header>
+    <div class="content"><div id="m_list"></div></div>
+  </div>
+  <div id="settingsPanel" class="panel">
+    <header>instellingen <button id="closeSettings" style="float:right">✕</button></header>
+    <div class="content">
+      <!-- re-use existing controls rendered in header by cloning them -->
+      <div id="settingsMirror"></div>
+    </div>
+  </div>
+  <div class="stats-box" id="statsBox" style="display:none">
+    <div>ships: <span id="m_count">0</span></div>
+    <div>mode: <span id="m_mode">hide moored</span></div>
+    <div>latency: <span id="m_latency">–</span> ms</div>
+  </div>
+  <div class="fabs" id="fabs" style="display:none">
+    <button class="fab" id="btnRecenter" title="recenter">📍</button>
+    <button class="fab" id="btnToggle" title="toggle mode">👁</button>
+  </div>
+
+</main>
     <footer>
       <div>schepen: <span id="count">0</span></div>
       <div>latency: <span id="latency">–</span> ms</div>
@@ -513,5 +572,113 @@
       renderAll();
     }
   </script>
+
+<script>
+(function(){
+  // PWA
+  if ('serviceWorker' in navigator) window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js'));
+
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const headerEl = document.querySelector('header');
+  if (isMobile && headerEl){
+    // add mobile topbar buttons
+    const btnList = document.createElement('button'); btnList.className='topbar-btn'; btnList.id='btnList'; btnList.textContent='☰';
+    const btnSettings = document.createElement('button'); btnSettings.className='topbar-btn'; btnSettings.id='btnSettings'; btnSettings.textContent='⚙';
+    headerEl.insertBefore(btnList, headerEl.firstChild);
+    headerEl.appendChild(btnSettings);
+  }
+
+  const scrim = document.getElementById('scrim');
+  const listPanel = document.getElementById('listPanel');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const mCount = document.getElementById('m_count');
+  const mMode = document.getElementById('m_mode');
+  const mLatency = document.getElementById('m_latency');
+
+  function toggleList(show){
+    if(!listPanel) return;
+    const want = (show===undefined) ? !listPanel.classList.contains('show') : show;
+    listPanel.classList.toggle('show', want);
+    scrim.classList.toggle('show', want || settingsPanel.classList.contains('show'));
+  }
+  function toggleSettings(show){
+    if(!settingsPanel) return;
+    const want = (show===undefined) ? !settingsPanel.classList.contains('show') : show;
+    settingsPanel.classList.toggle('show', want);
+    scrim.classList.toggle('show', want || listPanel.classList.contains('show'));
+    if (want){
+      // mirror controls: clone the header .controls into settings panel once
+      const mirror = document.getElementById('settingsMirror');
+      if (mirror && mirror.childElementCount === 0){
+        const controls = document.querySelector('header .controls');
+        if (controls){
+          mirror.appendChild(controls.cloneNode(true));
+        }
+      }
+    }
+  }
+
+  // wires
+  if (isMobile){
+    const listBtn = document.getElementById('btnList');
+    const settingsBtn = document.getElementById('btnSettings');
+    const closeList = document.getElementById('closeList');
+    const closeSettings = document.getElementById('closeSettings');
+    const fabs = document.getElementById('fabs');
+    const statsBox = document.getElementById('statsBox');
+    if (listBtn) listBtn.onclick = ()=> toggleList(true);
+    if (settingsBtn) settingsBtn.onclick = ()=> toggleSettings(true);
+    if (closeList) closeList.onclick = ()=> toggleList(false);
+    if (closeSettings) closeSettings.onclick = ()=> toggleSettings(false);
+    if (scrim) scrim.onclick = ()=> { toggleList(false); toggleSettings(false); };
+    // show fabs + stats
+    if (fabs) fabs.style.display = 'block';
+    if (statsBox) statsBox.style.display = 'block';
+  }
+
+  // hook into existing app to sync counters and toggle mode
+  // The desktop script defines SHOW_ALL, renderAll, etc. We'll defensively poll DOM changes.
+  function tryHook(){
+    try{
+      // latency
+      const lat = document.getElementById('latency');
+      if (lat && mLatency) mLatency.textContent = lat.textContent || '–';
+      // count
+      const cnt = document.getElementById('count');
+      if (cnt && mCount) mCount.textContent = cnt.textContent || '0';
+      // mode
+      if (typeof window.SHOW_ALL !== 'undefined') mMode.textContent = window.SHOW_ALL ? 'show all' : 'hide moored';
+    }catch{}
+  }
+  setInterval(tryHook, 500);
+
+  // mobile toggle button → reuse desktop preset buttons
+  const btnToggle = document.getElementById('btnToggle');
+  if (btnToggle){
+    btnToggle.onclick = ()=>{
+      const showBtn = document.getElementById('presetShow');
+      const hideBtn = document.getElementById('presetHide');
+      if (!window.SHOW_ALL){ // currently hide moored → switch to show all
+        if (showBtn) showBtn.click();
+      } else {
+        if (hideBtn) hideBtn.click();
+      }
+    };
+  }
+  // recenter → fit to current bbox
+  const btnRecenter = document.getElementById('btnRecenter');
+  if (btnRecenter){
+    btnRecenter.onclick = ()=>{
+      try{
+        const evt = new Event('change');
+        // trigger bbox change to run existing fit/draw logic
+        const sel = document.getElementById('bbox');
+        if (sel){ sel.dispatchEvent(evt); }
+      }catch{}
+    };
+  }
+})();
+</script>
+
 </body>
 </html>

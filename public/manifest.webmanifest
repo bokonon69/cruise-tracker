@@ -1,6 +1,6 @@
 {
-  "name": "Lloydkade Live",
-  "short_name": "Lloydkade",
+  "name": "Lloydkade Live Tracker",
+  "short_name": "Lloydkade Live",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
