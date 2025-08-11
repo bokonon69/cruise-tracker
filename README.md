@@ -1,10 +1,11 @@
-# Lloydkade Live Tracker — mobile optimized
+# Lloydkade Live — PWA (v3)
+- Persists **bbox selection + custom coords** and **map view (center/zoom)** per device
+- **Mini vessel card** at bottom for selected ship (name, SOG, quick link to VesselFinder)
+- **Deep link** button: copies URL with bbox/mode/view for sharing
+- Full-screen map, overlay stats, FABs; slide-in overlays (Ships, Settings)
+- Mobile defaults: hide moored, shorter trail/TTL; remembers mode
+- PWA: manifest + service worker
 
-What’s new:
-- Slide-out drawer for the ship list on small screens (☰ toggle)
-- Larger touch targets (≥44px), bigger popup font
-- Mobile defaults: start in **hide moored**, drawer closed, shorter trail/TTL
-- LocalStorage remembers mode (hide/show) and drawer open/closed
-- iOS-friendly layout: sticky header/footer, safe map gestures, no layout jumps
-
-Deploy the same way as before (Netlify Functions + `AISSTREAM_API_KEY`).
+Deploy:
+1) Upload to Netlify (Functions + `AISSTREAM_API_KEY`)
+2) Open on iPhone → Share → Add to Home Screen
