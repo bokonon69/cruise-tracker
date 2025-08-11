@@ -1,6 +1,6 @@
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open('lloydkade-v3').then(c => c.addAll(['/','/index.html','/manifest.webmanifest'])));
+  e.waitUntil(caches.open('lloydkade-v2-stable').then(c => c.addAll(['/','/index.html','/manifest.webmanifest'])));
 });
 self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', e => {
