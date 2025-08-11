@@ -1,94 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="nl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>lloydkade live</title>
-<link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#0f172a">
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>
-:root { --header:48px; --footer:34px; --panel:min(88vw,360px); --fab:56px; --radius:14px; --scrim:rgba(0,0,0,.35); }
-* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html, body { height:100%; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b1020; }
-#app { height:100dvh; display:grid; grid-template-rows:var(--header) 1fr var(--footer); overflow:hidden; }
-header { display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:0 .6rem; background:#0f172a; color:#e5e7eb; position:sticky; top:0; z-index:5; }
-header .title { font-weight:700; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.iconbtn { border:0; background:transparent; color:#e5e7eb; width:44px; height:44px; display:grid; place-items:center; border-radius:10px; }
-.iconbtn:active { background:rgba(255,255,255,.08); }
-main { position:relative; }
-#map { position:absolute; inset:0; touch-action:none; }
-.stats { position:absolute; top:10px; left:10px; z-index:4; background:rgba(17,24,39,.75); color:#fff; font-size:12px; line-height:1.25; padding:.5rem .6rem; border-radius: var(--radius); backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgba(0,0,0,.25); }
-.fabs { position:absolute; right:12px; bottom:12px; z-index:4; display:flex; flex-direction:column; gap:10px; }
-.fab { width:var(--fab); height:var(--fab); border-radius:50%; border:0; background:#111827; color:#fff; display:grid; place-items:center; box-shadow:0 10px 24px rgba(0,0,0,.3); font-size:20px; }
-footer { background:#0f172a; color:#94a3b8; display:flex; align-items:center; justify-content:space-between; padding:0 .6rem; font-size:12px; }
-.scrim { position:absolute; inset:0; background: var(--scrim); opacity:0; pointer-events:none; transition:.2s; z-index:4; }
-.scrim.show { opacity:1; pointer-events:auto; }
-.panel { position:absolute; top:0; bottom:0; width: var(--panel); background:#fff; z-index:5; box-shadow:0 10px 30px rgba(0,0,0,.35); display:flex; flex-direction:column; }
-.panel header { background:#fff; color:#111827; border-bottom:1px solid #eee; }
-.panel .content { overflow:auto; -webkit-overflow-scrolling:touch; padding:.5rem; }
-#listPanel { left:0; transform: translateX(-105%); transition: transform .2s ease; border-radius: 0 14px 14px 0; }
-#listPanel.show { transform: translateX(0); }
-#settingsPanel { right:0; transform: translateX(105%); transition: transform .2s ease; border-radius: 14px 0 0 14px; }
-#settingsPanel.show { transform: translateX(0); }
-.ship { padding:.6rem .4rem; border-bottom:1px dashed #eee; }
-.ship strong { display:block; font-size:14px; color:#111827; }
-.ship small { color:#6b7280; }
-.row { display:flex; gap:.5rem; align-items:center; }
-.row label { font-size:14px; color:#111827; min-width:96px; }
-.row input, .row select { flex:1; padding:.45rem .5rem; font-size:14px; border:1px solid #e5e7eb; border-radius:10px; }
-.section { padding:.25rem .25rem 1rem; }
-.section h3 { margin:.5rem 0; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:.06em; }
-.btn { padding:.5rem .7rem; border-radius:10px; border:1px solid #d1d5db; background:#fff; }
-.btn.primary { background:#111827; color:#fff; border-color:#111827; }
-.leaflet-popup-content { font-size: 15px; }
-.snack { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%) translateY(100%); background:#111827; color:#fff; padding:.6rem .8rem; border-radius:10px; box-shadow:0 8px 18px rgba(0,0,0,.3); transition: transform .25s ease, opacity .25s ease; opacity:0; z-index:10; }
-.snack.show { transform: translateX(-50%) translateY(0); opacity:1; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lloydkade live tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #app { display: grid; grid-template-columns: 380px 1fr; grid-template-rows: auto 1fr auto; height: 100%; }
+    header { grid-column: 1 / span 2; padding: .6rem .9rem; border-bottom: 1px solid #e5e7eb; display:flex; gap:.75rem; align-items: center; flex-wrap: wrap; }
+    aside { border-right: 1px solid #e5e7eb; overflow: auto; }
+    main { position: relative; }
+    #map { position:absolute; inset:0; }
+    footer { grid-column: 1 / span 2; border-top: 1px solid #e5e7eb; padding: .5rem .9rem; display:flex; justify-content: space-between; gap:.75rem; font-size: 14px; }
+    .controls label { margin-right: .5rem; font-size: 14px; }
+    .list { padding:.5rem; }
+    .list-item { padding:.4rem .3rem; border-bottom: 1px dashed #eee; cursor: pointer; }
+    .list-item:hover { background:#fafafa; }
+    .error { color: #b91c1c; }
+    button { padding:.35rem .6rem; border-radius:.5rem; border:1px solid #d1d5db; background:white; cursor:pointer; }
+    button.active { background:#111827; color:#fff; border-color:#111827; }
+    select, input[type="number"], input[type="text"] { padding:.25rem .35rem; }
+    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.25rem .5rem; }
+    .muted { opacity:.75; font-size:12px; }
+    .row { display:flex; gap:.5rem; align-items:center; margin-top:.25rem; }
+  </style>
 </head>
 <body>
-<div id="app">
-<header>
-  <button id="btnList" class="iconbtn" aria-label="open list" title="open list">☰</button>
-  <div class="title">lloydkade live</div>
-  <button id="btnSettings" class="iconbtn" aria-label="settings" title="settings">⚙</button>
-</header>
-<main>
-  <div id="map"></div>
-  <div class="stats" id="statsBox">
-    <div>ships: <span id="count">0</span></div>
-    <div>mode: <span id="mode">hide moored</span></div>
-    <div>latency: <span id="latency">–</span> ms</div>
-  </div>
-  <div class="fabs">
-    <button class="fab" id="btnRecenter" title="recenter">📍</button>
-    <button class="fab" id="btnToggle" title="toggle mode">👁</button>
-  </div>
-  <div id="scrim" class="scrim"></div>
-  <div id="listPanel" class="panel">
-    <header><div style="display:flex; align-items:center; gap:.5rem; width:100%; padding:0 .4rem;">
-      <button id="closeList" class="iconbtn" aria-label="close">✕</button>
-      <div style="font-weight:700; color:#111827;">ships</div>
-    </div></header>
-    <div class="content"><div id="list"></div></div>
-  </div>
-  <div id="settingsPanel" class="panel">
-    <header><div style="display:flex; align-items:center; gap:.5rem; width:100%; padding:0 .4rem;">
-      <button id="closeSettings" class="iconbtn" aria-label="close">✕</button>
-      <div style="font-weight:700; color:#111827;">settings</div>
-    </div></header>
-    <div class="content">
-      <div class="section">
-        <h3>live</h3>
-        <div class="row"><label>interval (s)</label><input id="interval" type="number" min="2" max="60" step="1" value="5" /></div>
-        <div class="row"><label>ttl (s)</label><input id="ttl" type="number" min="10" max="300" step="5" value="35" /></div>
-        <div class="row"><label>trail (points)</label><input id="trailLen" type="number" min="3" max="30" step="1" value="6" /></div>
-        <div class="row"><button id="start" class="btn primary">start</button><button id="stop" class="btn" disabled>stop</button></div>
-      </div>
-      <div class="section">
-        <h3>bbox</h3>
-        <div class="row"><label>profile</label>
+  <div id="app">
+    <header>
+      <strong>lloydkade live tracker</strong>
+      <div class="controls">
+        <label>bbox:
           <select id="bbox">
             <option value="gewenst">gewenst</option>
             <option value="normaal">normaal</option>
@@ -96,95 +40,478 @@ footer { background:#0f172a; color:#94a3b8; display:flex; align-items:center; ju
             <option value="ruim">ruim</option>
             <option value="custom">custom</option>
           </select>
-        </div>
-        <div class="row"><label>show bbox</label><select id="showbbox"><option value="1" selected>yes</option><option value="0">no</option></select></div>
-        <div class="row"><label>minLat</label><input id="minLat" type="number" step="0.0001" /></div>
-        <div class="row"><label>maxLat</label><input id="maxLat" type="number" step="0.0001" /></div>
-        <div class="row"><label>minLon</label><input id="minLon" type="number" step="0.0001" /></div>
-        <div class="row"><label>maxLon</label><input id="maxLon" type="number" step="0.0001" /></div>
-        <div class="row"><button id="applyFromMap" class="btn">use map bbox</button><button id="applyToMap" class="btn">update rectangle</button></div>
+        </label>
+        <label>toon bbox: <input id="showbbox" type="checkbox" checked /></label>
+        <label>interval (s): <input id="interval" type="number" min="2" max="60" step="1" value="5" /></label>
+        <label>ttl (s): <input id="ttl" type="number" min="10" max="300" step="5" value="45" /></label>
+        <label>trail (punten): <input id="trailLen" type="number" min="3" max="30" step="1" value="8" /></label>
+        <button id="presetHide" class="active">Hide moored</button>
+        <button id="presetShow">Show all</button>
+        <button id="start">start</button>
+        <button id="stop" disabled>stop</button>
+        <span id="status"></span>
       </div>
-    </div>
+    </header>
+    <aside>
+      <div style="padding:.5rem" id="customPanel" class="muted">
+        <div><strong>custom bbox</strong></div>
+        <div class="grid">
+          <label>minLat <input id="minLat" type="number" step="0.0001" /></label>
+          <label>maxLat <input id="maxLat" type="number" step="0.0001" /></label>
+          <label>minLon <input id="minLon" type="number" step="0.0001" /></label>
+          <label>maxLon <input id="maxLon" type="number" step="0.0001" /></label>
+        </div>
+        <div class="row">
+          <button id="applyFromMap">use map bbox</button>
+          <button id="applyToMap">update rectangle</button>
+        </div>
+        <hr/>
+        <div><strong>profielen opslaan</strong></div>
+        <div class="row">
+          <input id="profileName" type="text" placeholder="profielnaam" />
+          <button id="saveProfile">save</button>
+          <button id="setDefault">set default</button>
+        </div>
+        <div class="row">
+          <label>laad profiel: <select id="savedProfiles"></select></label>
+          <button id="deleteProfile">delete</button>
+        </div>
+        <div class="muted">profielen worden lokaal opgeslagen (browser localStorage)</div>
+        <hr/>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+    <main>
+      <div id="map"></div>
+    </main>
+    <footer>
+      <div>schepen: <span id="count">0</span></div>
+      <div>latency: <span id="latency">–</span> ms</div>
+    </footer>
   </div>
-</main>
-<footer>
-  <div>health: <span id="health">–</span></div>
-  <div style="opacity:.7">lloydkade</div>
-  <div><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:#94a3b8">osm</a></div>
-</footer>
-<div id="snack" class="snack" role="status" aria-live="polite"></div>
-</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-if ('serviceWorker' in navigator) window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js'));
-const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
-const BASE_PROFILES = {
-  smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
-  normaal:{ ...DEFAULTS },
-  ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 },
-  gewenst:{ minLat: 51.9039, maxLat: 51.9078, minLon: 4.4548, maxLon: 4.4725 }
-};
-const STORE = new Map(); let TTL_MS=35000, TRAIL_LEN=6, SHOW_ALL=false; const LS_MODE='lloyd_mode_v1';
-try{ SHOW_ALL=(localStorage.getItem(LS_MODE)==='show'); }catch{}
-let map, markers=new Map(), trails=new Map(), arrows=new Map(), bboxRect=null, pollTimer=null;
-function getRefs(){ return {
-  minLat:document.getElementById('minLat'), maxLat:document.getElementById('maxLat'),
-  minLon:document.getElementById('minLon'), maxLon:document.getElementById('maxLon'),
-  interval:document.getElementById('interval'), ttl:document.getElementById('ttl'), trailLen:document.getElementById('trailLen'),
-  bboxSel:document.getElementById('bbox'), showbboxSel:document.getElementById('showbbox')
-};}
-function fitTo(b){ const sw=L.latLng(b.minLat,b.minLon), ne=L.latLng(b.maxLat,b.maxLon); map.fitBounds(L.latLngBounds(sw,ne)); }
-function drawBbox(b){ if(bboxRect){map.removeLayer(bboxRect); bboxRect=null;} const show=getRefs().showbboxSel.value==='1'; if(!show) return; const sw=L.latLng(b.minLat,b.minLon), ne=L.latLng(b.maxLat,b.maxLon); bboxRect=L.rectangle([sw,ne],{weight:1,dashArray:'4,4',fillOpacity:.03}); bboxRect.addTo(map); }
-function setInputs(b){ const {minLat,maxLat,minLon,maxLon}=getRefs(); minLat.value=(b.minLat||'').toFixed?b.minLat.toFixed(4):b.minLat; maxLat.value=(b.maxLat||'').toFixed?b.maxLat.toFixed(4):b.maxLat; minLon.value=(b.minLon||'').toFixed?b.minLon.toFixed(4):b.minLon; maxLon.value=(b.maxLon||'').toFixed?b.maxLon.toFixed(4):b.maxLon; }
-function getInputs(){ const {minLat,maxLat,minLon,maxLon}=getRefs(); return { minLat: parseFloat(minLat.value), maxLat: parseFloat(maxLat.value), minLon: parseFloat(minLon.value), maxLon: parseFloat(maxLon.value) }; }
-function currentBbox(){ const sel=getRefs().bboxSel.value; if(sel==='custom'){ const v=getInputs(); return { minLat: v.minLat||DEFAULTS.minLat, maxLat: v.maxLat||DEFAULTS.maxLat, minLon: v.minLon||DEFAULTS.minLon, maxLon: v.maxLon||DEFAULTS.maxLon }; } return BASE_PROFILES[sel] || BASE_PROFILES.gewenst; }
-function fmt(n,d=1){ return (n==null||Number.isNaN(n))?'–':Number(n).toFixed(d); }
-const vf=mmsi=>`https://www.vesselfinder.com/?mmsi=${encodeURIComponent(mmsi)}`;
-async function snapshot(bbox,windowMs=6000){ const url=new URL('/.netlify/functions/ais-snapshot',location.origin); Object.entries({...bbox,windowMs}).forEach(([k,v])=>url.searchParams.set(k,v)); const t0=performance.now(); const res=await fetch(url,{cache:'no-store'}); const latency=Math.round(performance.now()-t0); document.getElementById('latency').textContent=latency; if(!res.ok) throw new Error(`http ${res.status}`); return res.json(); }
-function updateStore(items,bbox){ const now=Date.now(); const {trailLen}=getRefs(); TRAIL_LEN=Math.min(Math.max(parseInt(trailLen.value,10)||6,3),30);
-  for(const v of items){ if(!v.mmsi) continue; const prev=STORE.get(v.mmsi)||{}; const trail=(prev.trail||[]).slice(-TRAIL_LEN+1); trail.push([v.lat,v.lon]); STORE.set(v.mmsi,{...prev,...v,lastSeen:now,trail}); }
-  for(const [mmsi,rec] of STORE){ const expired=now-(rec.lastSeen||0)>TTL_MS; const outside=rec.lat<bbox.minLat||rec.lat>bbox.maxLat||rec.lon<bbox.minLon||rec.lon>bbox.maxLon; if(expired||outside){ STORE.delete(mmsi); const mk=markers.get(mmsi); if(mk){map.removeLayer(mk); markers.delete(mmsi);} const pl=trails.get(mmsi); if(pl){map.removeLayer(pl); trails.delete(mmsi);} const ar=arrows.get(mmsi); if(ar){map.removeLayer(ar); arrows.delete(mmsi);} } }
-}
-function applyFilter(items){ if(SHOW_ALL) return items; return items.filter(v=>{ const has=v.sog!==null&&v.sog!==undefined&&!Number.isNaN(v.sog); return has&&v.sog>0.8; }); }
-function renderList(items){ const el=document.getElementById('list'); el.innerHTML=''; items.sort((a,b)=>(b.sog||0)-(a.sog||0));
-  for(const v of items){ const since=Math.round((Date.now()-(v.lastSeen||0))/1000); const sogTxt=(v.sog==null||Number.isNaN(v.sog))?'–':fmt(v.sog);
-    const div=document.createElement('div'); div.className='ship'; div.innerHTML=`<strong>${v.name||'unknown'}</strong><small>MMSI ${v.mmsi||'–'} • SOG ${sogTxt} kn • COG ${fmt(v.cog)}° • ${since}s</small>`;
-    div.onclick=()=>{ const m=markers.get(v.mmsi); if(m){ map.setView(m.getLatLng(),16); m.openPopup(); } toggleList(false); };
-    el.appendChild(div);
-  }
-  document.getElementById('count').textContent=String(items.length);
-}
-function endpointFromCog(lat,lon,cog,meters=100){ if(!Number.isFinite(cog)) return [lat,lon]; const R=6378137, br=cog*Math.PI/180, lat1=lat*Math.PI/180, lon1=lon*Math.PI/180;
-  const lat2=Math.asin(Math.sin(lat1)*Math.cos(meters/R)+Math.cos(lat1)*Math.sin(meters/R)*Math.cos(br));
-  const lon2=lon1+Math.atan2(Math.sin(br)*Math.sin(meters/R)*Math.cos(lat1), Math.cos(meters/R)-Math.sin(lat1)*Math.sin(lat2)); return [lat2*180/Math.PI, lon2*180/Math.PI]; }
-function renderGraphics(items){ const now=Date.now(); for(const v of items){ const latlng=[v.lat,v.lon]; const age=now-(v.lastSeen||0); const frac=Math.min(Math.max(age/TTL_MS,0),1); const opacity=Math.max(.25,1-frac*.85); const radius=7;
-  const popup=`<div class="pop"><strong>${v.name||'unknown'}</strong><br/>MMSI: ${v.mmsi||'–'}<br/>Type: ${v.type||'–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a></div>`;
-  let mk=markers.get(v.mmsi); if(mk){ mk.setLatLng(latlng).setStyle({opacity,fillOpacity:opacity,radius}); mk.bindPopup(popup); } else { mk=L.circleMarker(latlng,{radius,weight:1.5,opacity,fillOpacity:opacity}); mk.addTo(map).bindPopup(popup); markers.set(v.mmsi,mk); }
-  let pl=trails.get(v.mmsi); const tl=(v.trail||[]).map(([a,b])=>[a,b]); if(pl){ pl.setLatLngs(tl).setStyle({opacity:Math.max(.2,opacity-.2)}); } else { pl=L.polyline(tl,{weight:2,opacity:.6}); pl.addTo(map); trails.set(v.mmsi,pl); }
-  let ar=arrows.get(v.mmsi); const end=endpointFromCog(v.lat,v.lon,v.cog,100); if(ar){ ar.setLatLngs([latlng,end]).setStyle({opacity:Math.max(.3,opacity)}); } else { ar=L.polyline([latlng,end],{weight:2,opacity:.8}); ar.addTo(map); arrows.set(v.mmsi,ar); }
-}}
-function renderAll(){ const active=[...STORE.values()]; const filtered=applyFilter(active); renderGraphics(filtered); renderList(filtered); document.getElementById('mode').textContent=SHOW_ALL?'show all':'hide moored'; }
-async function tick(){ const bbox=currentBbox(); try{ const res=await snapshot(bbox,6000); document.getElementById('health').textContent=res.ok?'ok':'err'; updateStore(res.data||[],bbox); requestAnimationFrame(renderAll); } catch(e){ document.getElementById('health').textContent='offline'; demoOnce(); } }
-function snack(msg){ const el=document.getElementById('snack'); el.textContent=msg; el.classList.add('show'); try{ if('vibrate' in navigator) navigator.vibrate(12); }catch{} setTimeout(()=>el.classList.remove('show'),1600); }
-function start(){ if(pollTimer) return; const {ttl,interval}=getRefs(); TTL_MS=Math.min(Math.max((parseInt(ttl.value,10)||35)*1000,5000),600000); document.getElementById('start').disabled=true; document.getElementById('stop').disabled=false; tick(); pollTimer=setInterval(tick, Math.min(Math.max(parseInt(interval.value,10)||5,2),60)*1000); }
-function stop(){ if(!pollTimer) return; clearInterval(pollTimer); pollTimer=null; document.getElementById('start').disabled=false; document.getElementById('stop').disabled=true; }
-function toggleList(show){ const p=document.getElementById('listPanel'); if(show===undefined) show=!p.classList.contains('show'); p.classList.toggle('show',show); document.getElementById('scrim').classList.toggle('show', show || document.getElementById('settingsPanel').classList.contains('show')); }
-function toggleSettings(show){ const p=document.getElementById('settingsPanel'); if(show===undefined) show=!p.classList.contains('show'); p.classList.toggle('show',show); document.getElementById('scrim').classList.toggle('show', show || document.getElementById('listPanel').classList.contains('show')); }
-function wireEvents(){ document.getElementById('btnList').onclick=()=> toggleList(true); document.getElementById('btnSettings').onclick=()=> toggleSettings(true); document.getElementById('closeList').onclick=()=> toggleList(false); document.getElementById('closeSettings').onclick=()=> toggleSettings(false); document.getElementById('scrim').onclick=()=>{ toggleList(false); toggleSettings(false); };
-  document.getElementById('btnRecenter').onclick=()=>{ const b=currentBbox(); fitTo(b); drawBbox(b); snack('recentered'); };
-  document.getElementById('btnToggle').onclick=()=>{ SHOW_ALL=!SHOW_ALL; try{ localStorage.setItem(LS_MODE, SHOW_ALL?'show':'hide'); }catch{}; document.getElementById('mode').textContent=SHOW_ALL?'show all':'hide moored'; renderAll(); snack('mode: '+(SHOW_ALL?'show all':'hide moored')); };
-  const {bboxSel, showbboxSel}=getRefs();
-  bboxSel.onchange=()=>{ const b=currentBbox(); setInputs(b); fitTo(b); drawBbox(b); };
-  showbboxSel.onchange=()=> drawBbox(currentBbox());
-  document.getElementById('applyFromMap').onclick=()=>{ if(!bboxRect) return; const bb=bboxRect.getBounds(); const s=bb.getSouthWest(), n=bb.getNorthEast(); setInputs({minLat:s.lat, minLon:s.lng, maxLat:n.lat, maxLon:n.lng}); };
-  document.getElementById('applyToMap').onclick=()=>{ const b=currentBbox(); if(bboxRect) map.removeLayer(bboxRect); const sw=L.latLng(b.minLat,b.minLon), ne=L.latLng(b.maxLat,b.maxLon); bboxRect=L.rectangle([sw,ne],{weight:1,dashArray:'4,4',fillOpacity:.03}); bboxRect.addTo(map); fitTo(b); };
-  document.getElementById('start').onclick=start; document.getElementById('stop').onclick=stop;
-}
-function demoOnce(){ const b=currentBbox(); const rnd=(a,c)=>a+Math.random()*(c-a); const names=['Demo I','Demo II','Demo III','Demo IV']; const now=Date.now();
-  const items=names.map((n,i)=>({ mmsi:`999000${i+1}`, name:n, lat:rnd(b.minLat,b.maxLat), lon:rnd(b.minLon,b.maxLon), sog:Math.round(rnd(0,18)*10)/10, cog:Math.round(rnd(0,359)), type:'Demo', ts:now, lastSeen:now, trail:[[rnd(b.minLat,b.maxLat), rnd(b.minLon,b.maxLon)]] }));
-  for(const v of items) STORE.set(v.mmsi,v); renderAll();
-}
-window.addEventListener('DOMContentLoaded', ()=>{ map=L.map('map',{tap:true,tapTolerance:10,inertia:true}); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors', maxZoom:19}).addTo(map);
-  const b=BASE_PROFILES.gewenst; setInputs(b); fitTo(b); drawBbox(b); wireEvents(); start(); });
-</script>
-</body></html>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script>
+    const DEFAULTS = { minLat: 51.9038, maxLat: 51.9090, minLon: 4.4550, maxLon: 4.4720 };
+    const BASE_PROFILES = {
+      smal:   { minLat: 51.9056, maxLat: 51.9075, minLon: 4.4585, maxLon: 4.4680 },
+      normaal:{ ...DEFAULTS },
+      ruim:   { minLat: 51.9000, maxLat: 51.9140, minLon: 4.4450, maxLon: 4.4850 },
+      gewenst:{ minLat: 51.9039, maxLat: 51.9078, minLon: 4.4548, maxLon: 4.4725 }
+    };
+
+    // persistent store
+    const STORE = new Map(); // mmsi -> { ...v, lastSeen, trail: [[lat,lon], ...] }
+    let TTL_MS = 45000;
+    let TRAIL_LEN = 8;
+    let SHOW_ALL = false; // default hide moored
+
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    let markers = new Map();   // mmsi -> circleMarker
+    let trails = new Map();    // mmsi -> polyline
+    let arrows = new Map();    // mmsi -> arrow polyline
+    let bboxRect = null;       // rectangle overlay
+    let pollTimer = null;
+
+    // saved profiles in localStorage
+    const LS_KEY = 'lloydkade_profiles_v1';
+    const LS_DEFAULT = 'lloydkade_default_profile_v1';
+    function loadSavedProfiles() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } }
+    function saveSavedProfiles(obj) { localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
+    function getDefaultProfileName() { return localStorage.getItem(LS_DEFAULT) || null; }
+    function setDefaultProfileName(name) { localStorage.setItem(LS_DEFAULT, name); }
+
+    function populateSavedProfilesSelect() {
+      const sel = document.getElementById('savedProfiles');
+      sel.innerHTML = '';
+      const saved = loadSavedProfiles();
+      const names = Object.keys(saved).sort();
+      for (const n of names) {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      }
+    }
+
+    function fitTo(b) {
+      const sw = L.latLng(b.minLat, b.minLon);
+      const ne = L.latLng(b.maxLat, b.maxLon);
+      map.fitBounds(L.latLngBounds(sw, ne));
+    }
+
+    function drawBbox(b, editable=false) {
+      if (bboxRect) { map.removeLayer(bboxRect); bboxRect = null; }
+      const show = document.getElementById('showbbox').checked;
+      if (!show) return;
+      const sw = L.latLng(b.minLat, b.minLon);
+      const ne = L.latLng(b.maxLat, b.maxLon);
+      bboxRect = L.rectangle([sw, ne], { weight: 1, dashArray: '4,4', fillOpacity: 0.03 });
+      bboxRect.addTo(map);
+      if (editable && bboxRect.editing && typeof bboxRect.editing.enable === 'function') {
+        bboxRect.editing.enable();
+        bboxRect.on('edit', () => {
+          const bb = bboxRect.getBounds();
+          const s = bb.getSouthWest();
+          const n = bb.getNorthEast();
+          setInputs({ minLat: s.lat, minLon: s.lng, maxLat: n.lat, maxLon: n.lng });
+        });
+      }
+    }
+
+    function setInputs(b) {
+      document.getElementById('minLat').value = (b.minLat||'').toFixed ? b.minLat.toFixed(4) : b.minLat;
+      document.getElementById('maxLat').value = (b.maxLat||'').toFixed ? b.maxLat.toFixed(4) : b.maxLat;
+      document.getElementById('minLon').value = (b.minLon||'').toFixed ? b.minLon.toFixed(4) : b.minLon;
+      document.getElementById('maxLon').value = (b.maxLon||'').toFixed ? b.maxLon.toFixed(4) : b.maxLon;
+    }
+    function getInputs() {
+      return {
+        minLat: parseFloat(document.getElementById('minLat').value),
+        maxLat: parseFloat(document.getElementById('maxLat').value),
+        minLon: parseFloat(document.getElementById('minLon').value),
+        maxLon: parseFloat(document.getElementById('maxLon').value)
+      };
+    }
+
+    function currentBbox() {
+      const sel = document.getElementById('bbox').value;
+      if (sel === 'custom') {
+        const v = getInputs();
+        return {
+          minLat: v.minLat || DEFAULTS.minLat,
+          maxLat: v.maxLat || DEFAULTS.maxLat,
+          minLon: v.minLon || DEFAULTS.minLon,
+          maxLon: v.maxLon || DEFAULTS.maxLon
+        };
+      }
+      const saved = loadSavedProfiles();
+      if (saved[sel]) return saved[sel];
+      return BASE_PROFILES[sel] || BASE_PROFILES.gewenst;
+    }
+
+    (function initDefaultProfile() {
+      populateSavedProfilesSelect();
+      const def = getDefaultProfileName();
+      const baseNames = ['gewenst','normaal','smal','ruim','custom'];
+      const sel = document.getElementById('bbox');
+      if (def && !baseNames.includes(def)) {
+        const opt = document.createElement('option');
+        opt.value = def; opt.textContent = def + ' (saved)';
+        sel.insertBefore(opt, sel.firstChild);
+        sel.value = def;
+        const b = currentBbox();
+        setInputs(b);
+        fitTo(b); drawBbox(b, false);
+      } else {
+        fitTo(BASE_PROFILES.gewenst); drawBbox(BASE_PROFILES.gewenst);
+        setInputs(BASE_PROFILES.gewenst);
+      }
+    })();
+
+    function fmt(n, d=1){ return (n==null || Number.isNaN(n)) ? '–' : Number(n).toFixed(d); }
+    const vf = (mmsi) => `https://www.vesselfinder.com/?mmsi=${encodeURIComponent(mmsi)}`;
+
+    async function snapshot(bbox, windowMs=6000) {
+      const url = new URL('/.netlify/functions/ais-snapshot', window.location.origin);
+      Object.entries({ ...bbox, windowMs }).forEach(([k,v]) => url.searchParams.set(k, v));
+      const t0 = performance.now();
+      const res = await fetch(url, { cache: 'no-store' });
+      const latency = Math.round(performance.now() - t0);
+      document.getElementById('latency').textContent = latency;
+      if (!res.ok) throw new Error(`http ${res.status}`);
+      return res.json();
+    }
+
+    function updateStore(items, bbox) {
+      const now = Date.now();
+      TRAIL_LEN = Math.min(Math.max(parseInt(document.getElementById('trailLen').value,10)||8,3),30);
+      for (const v of items) {
+        if (!v.mmsi) continue;
+        const prev = STORE.get(v.mmsi) || {};
+        const trail = (prev.trail || []).slice(-TRAIL_LEN + 1);
+        trail.push([v.lat, v.lon]);
+        STORE.set(v.mmsi, { ...prev, ...v, lastSeen: now, trail });
+      }
+      for (const [mmsi, rec] of STORE) {
+        const expired = now - (rec.lastSeen || 0) > TTL_MS;
+        const outside = rec.lat < bbox.minLat || rec.lat > bbox.maxLat
+                     || rec.lon < bbox.minLon || rec.lon > bbox.maxLon;
+        if (expired || outside) {
+          STORE.delete(mmsi);
+          const mk = markers.get(mmsi); if (mk) { map.removeLayer(mk); markers.delete(mmsi); }
+          const pl = trails.get(mmsi);  if (pl) { map.removeLayer(pl); trails.delete(mmsi); }
+          const ar = arrows.get(mmsi);  if (ar) { map.removeLayer(ar); arrows.delete(mmsi); }
+        }
+      }
+    }
+
+    // --- Filter logic ---
+    function applyFilter(items) {
+      if (SHOW_ALL) return items; // show everything
+      // hide moored: require valid SOG and > 0.8 kn
+      return items.filter(v => {
+        const hasSog = v.sog !== null && v.sog !== undefined && !Number.isNaN(v.sog);
+        return hasSog && v.sog > 0.8;
+      });
+    }
+
+    function renderList(items) {
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      items.sort((a,b) => (b.sog||0)-(a.sog||0));
+      for (const v of items) {
+        const age = Date.now() - (v.lastSeen||0);
+        const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
+        const dim = (1 - frac).toFixed(2);
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.style.opacity = dim;
+        const since = Math.round(age/1000);
+        const sogTxt = (v.sog==null || Number.isNaN(v.sog)) ? '–' : fmt(v.sog);
+        div.textContent = `${v.name || 'onbekend'} · MMSI ${v.mmsi || '–'} · SOG ${sogTxt} kn · COG ${fmt(v.cog)} · ${since}s geleden`;
+        div.onclick = () => {
+          const m = markers.get(v.mmsi);
+          if (m) { map.setView(m.getLatLng(), 16); m.openPopup(); }
+        };
+        el.appendChild(div);
+      }
+      document.getElementById('count').textContent = String(items.length);
+    }
+
+    function endpointFromCog(lat, lon, cogDeg, meters=100) {
+      if (!Number.isFinite(cogDeg)) return [lat, lon];
+      const R = 6378137;
+      const brng = cogDeg * Math.PI/180;
+      const lat1 = lat * Math.PI/180;
+      const lon1 = lon * Math.PI/180;
+      const lat2 = Math.asin(Math.sin(lat1)*Math.cos(meters/R) + Math.cos(lat1)*Math.sin(meters/R)*Math.cos(brng));
+      const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(meters/R)*Math.cos(lat1), Math.cos(meters/R)-Math.sin(lat1)*Math.sin(lat2));
+      return [lat2*180/Math.PI, lon2*180/Math.PI];
+    }
+
+    function renderGraphics(items) {
+      const now = Date.now();
+      for (const v of items) {
+        const latlng = [v.lat, v.lon];
+        const age = now - (v.lastSeen||0);
+        const frac = Math.min(Math.max(age / TTL_MS, 0), 1);
+        const opacity = Math.max(0.25, 1 - frac * 0.85);
+        const radius = 6 - Math.floor(frac * 2);
+
+        const popup = `<strong>${v.name || 'onbekend'}</strong><br/>MMSI: ${v.mmsi || '–'}<br/>Type: ${v.type || '–'}<br/>SOG: ${fmt(v.sog)} kn<br/>COG: ${fmt(v.cog)}°<br/><a href="${vf(v.mmsi||'')}" target="_blank" rel="noopener">open in vesselfinder</a>`;
+
+        let mk = markers.get(v.mmsi);
+        if (mk) {
+          mk.setLatLng(latlng).setStyle({ opacity, fillOpacity: opacity, radius });
+          mk.bindPopup(popup);
+        } else {
+          mk = L.circleMarker(latlng, { radius, weight: 1, opacity, fillOpacity: opacity });
+          mk.addTo(map).bindPopup(popup);
+          markers.set(v.mmsi, mk);
+        }
+
+        // trail
+        let pl = trails.get(v.mmsi);
+        const tl = (v.trail || []).map(([la,lo]) => [la,lo]);
+        if (pl) {
+          pl.setLatLngs(tl).setStyle({ opacity: Math.max(0.2, opacity - 0.2) });
+        } else {
+          pl = L.polyline(tl, { weight: 2, opacity: 0.6 });
+          pl.addTo(map);
+          trails.set(v.mmsi, pl);
+        }
+
+        // arrow
+        let ar = arrows.get(v.mmsi);
+        const end = endpointFromCog(v.lat, v.lon, v.cog, 100);
+        if (ar) {
+          ar.setLatLngs([latlng, end]).setStyle({ opacity: Math.max(0.3, opacity) });
+        } else {
+          ar = L.polyline([latlng, end], { weight: 2, opacity: 0.8 });
+          ar.addTo(map);
+          arrows.set(v.mmsi, ar);
+        }
+      }
+    }
+
+    function status(msg, isError=false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = isError ? 'error' : '';
+    }
+
+    function currentIntervalMs() { return Math.min(Math.max(parseInt(document.getElementById('interval').value,10)||5,2),60)*1000; }
+
+    function renderAll() {
+      const active = Array.from(STORE.values());
+      const filtered = applyFilter(active);
+      renderGraphics(filtered);
+      renderList(filtered);
+    }
+
+    async function tick() {
+      const bbox = currentBbox();
+      try {
+        const res = await snapshot(bbox, 6000);
+        status(`ok (${res.count})`);
+        updateStore(res.data || [], bbox);
+        renderAll();
+      } catch (e) {
+        status(`functie niet bereikbaar (${e.message}). demo-modus actief`, true);
+        demoOnce();
+      }
+    }
+
+    function start() {
+      if (pollTimer) return;
+      TTL_MS = Math.min(Math.max((parseInt(document.getElementById('ttl').value,10)||45)*1000, 5000), 600000);
+      SHOW_ALL = false; // default: hide moored
+      setActiveButtons();
+      document.getElementById('start').disabled = true;
+      document.getElementById('stop').disabled = false;
+      tick();
+      pollTimer = setInterval(tick, currentIntervalMs());
+    }
+
+    function stop() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+      document.getElementById('start').disabled = false;
+      document.getElementById('stop').disabled = true;
+      status('gestopt');
+    }
+
+    function setActiveButtons() {
+      document.getElementById('presetHide').classList.toggle('active', !SHOW_ALL);
+      document.getElementById('presetShow').classList.toggle('active', SHOW_ALL);
+    }
+
+    document.getElementById('start').onclick = start;
+    document.getElementById('stop').onclick = stop;
+    document.getElementById('bbox').onchange = () => {
+      const sel = document.getElementById('bbox').value;
+      document.getElementById('customPanel').style.display = (sel === 'custom') ? 'block' : 'none';
+      const b = currentBbox();
+      fitTo(b);
+      drawBbox(b, sel === 'custom');
+      if (sel !== 'custom') setInputs(b);
+    };
+    document.getElementById('showbbox').onchange = () => { drawBbox(currentBbox(), document.getElementById('bbox').value === 'custom'); };
+    document.getElementById('presetHide').onclick = () => { SHOW_ALL = false; setActiveButtons(); renderAll(); };
+    document.getElementById('presetShow').onclick = () => { SHOW_ALL = true; setActiveButtons(); renderAll(); };
+
+    document.getElementById('applyFromMap').onclick = () => {
+      if (!bboxRect) return;
+      const bb = bboxRect.getBounds();
+      const s = bb.getSouthWest();
+      const n = bb.getNorthEast();
+      setInputs({ minLat: s.lat, minLon: s.lng, maxLat: n.lat, maxLon: n.lng });
+    };
+    document.getElementById('applyToMap').onclick = () => {
+      const b = currentBbox();
+      drawBbox(b, true);
+      fitTo(b);
+    };
+
+    // profile save/load/delete/default
+    function loadSavedProfilesSelect() {
+      const sel = document.getElementById('savedProfiles');
+      sel.innerHTML = '';
+      const saved = loadSavedProfiles();
+      const names = Object.keys(saved).sort();
+      for (const n of names) {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      }
+    }
+    document.getElementById('saveProfile').onclick = () => {
+      const name = (document.getElementById('profileName').value || '').trim();
+      if (!name) return alert('voer een profielnaam in');
+      const vals = getInputs();
+      const saved = loadSavedProfiles();
+      saved[name] = vals;
+      saveSavedProfiles(saved);
+      loadSavedProfilesSelect();
+      const sel = document.getElementById('bbox');
+      let opt = Array.from(sel.options).find(o => o.value === name);
+      if (!opt) {
+        opt = document.createElement('option');
+        opt.value = name; opt.textContent = name + ' (saved)';
+        sel.appendChild(opt);
+      }
+      sel.value = name;
+      const b = currentBbox();
+      fitTo(b); drawBbox(b);
+    };
+    document.getElementById('setDefault').onclick = () => {
+      const sel = document.getElementById('bbox').value;
+      if (sel === 'custom') return alert('sla het custom profiel eerst op met een naam');
+      setDefaultProfileName(sel);
+      alert('default profiel gezet: ' + sel);
+    };
+    document.getElementById('deleteProfile').onclick = () => {
+      const selSaved = document.getElementById('savedProfiles').value;
+      if (!selSaved) return;
+      const saved = loadSavedProfiles();
+      delete saved[selSaved];
+      saveSavedProfiles(saved);
+      loadSavedProfilesSelect();
+      const mainSel = document.getElementById('bbox');
+      for (const o of Array.from(mainSel.options)) {
+        if (o.value === selSaved) { mainSel.removeChild(o); break; }
+      }
+    };
+    document.getElementById('savedProfiles').onchange = (e) => {
+      const name = e.target.value;
+      const saved = loadSavedProfiles();
+      if (saved[name]) {
+        setInputs(saved[name]);
+        const mainSel = document.getElementById('bbox');
+        let opt = Array.from(mainSel.options).find(o => o.value === name);
+        if (!opt) {
+          opt = document.createElement('option');
+          opt.value = name; opt.textContent = name + ' (saved)';
+          mainSel.appendChild(opt);
+        }
+        mainSel.value = name;
+        const b = currentBbox();
+        fitTo(b); drawBbox(b);
+      }
+    };
+
+    // initialise custom panel with current bbox
+    loadSavedProfilesSelect();
+    setInputs(BASE_PROFILES.gewenst);
+    document.getElementById('customPanel').style.display = (document.getElementById('bbox').value === 'custom') ? 'block' : 'none';
+
+    function demoOnce() {
+      const b = currentBbox();
+      const rnd = (min, max) => min + Math.random() * (max - min);
+      const names = ['Demo I', 'Demo II', 'Demo III', 'Demo IV'];
+      const now = Date.now();
+      const items = names.map((n, i) => ({
+        mmsi: `999000${i+1}`,
+        name: n,
+        lat: rnd(b.minLat, b.maxLat),
+        lon: rnd(b.minLon, b.maxLon),
+        sog: Math.round(rnd(0, 18)*10)/10,
+        cog: Math.round(rnd(0, 359)),
+        type: 'Demo',
+        ts: now,
+        lastSeen: now,
+        trail: [[rnd(b.minLat, b.maxLat), rnd(b.minLon, b.maxLon)]]
+      }));
+      for (const v of items) STORE.set(v.mmsi, v);
+      renderAll();
+    }
+  </script>
+</body>
+</html>

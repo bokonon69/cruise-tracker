@@ -1,6 +1,6 @@
 {
   "name": "lloydkade-live-tracker",
-  "version": "v2-stable",
+  "version": "0.7.1",
   "private": true,
   "type": "commonjs",
   "scripts": {
